@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
-# filepath: c:\Users\souna\OneDrive\Desktop\My folders\ML_projects\Solutions challenge\SafeDrive\drowsiness_server\build.sh
 echo "Starting build process..."
 
-# Install system dependencies for dlib
+# First install minimal dependencies
+pip install fastapi uvicorn
+
+# Install system dependencies for image processing
 apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    libopenblas-dev \
-    liblapack-dev \
-    libx11-dev
+    libgl1-mesa-glx \
+    libglib2.0-0
 
-# Show environment info
-echo "Python version: $(python --version)"
-echo "Pip version: $(pip --version)"
+# Install packages incrementally to avoid memory issues
+echo "Installing numpy, scipy..."
+pip install numpy scipy
 
-# Install Python dependencies
-pip install -r requirements.txt
+echo "Installing OpenCV..."
+pip install opencv-python-headless
+
+echo "Installing dlib binary..."
+pip install dlib-binary
+
+echo "Installing remaining dependencies..."
+pip install python-multipart python-dotenv twilio websockets pydantic==1.10.7 imutils
 
 # Verify installation
 echo "Installed packages:"
-pip list
+pip list | grep -E "fastapi|uvicorn|numpy|opencv|dlib|websockets|twilio"
 
 echo "Build completed!"
-chmod +x build.sh
