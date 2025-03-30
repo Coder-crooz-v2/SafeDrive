@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { RootState, AppDispatch } from '../store/store';
 import { fetchAdminProfile, fetchClients } from '../redux/slices/adminSlice';
 import { logoutAdmin, setAuth } from '../redux/slices/authSlice';
@@ -31,10 +31,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, Phone, Users, Search, UserCheck, LogOut, AlertTriangle, PieChart, BarChart2 } from 'lucide-react';
+import { Briefcase, Phone, Users, Search, UserCheck, LogOut, AlertTriangle, BarChart2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import axios from 'axios';
 import { format } from 'date-fns';
 import {
     BarChart,
@@ -49,6 +48,7 @@ import {
     Pie,
     Cell
 } from 'recharts';
+import { axiosInstance } from '@/lib/axios';
 
 interface SortConfig {
     key: string;
@@ -120,7 +120,7 @@ const AdminDashboard = () => {
     const dispatch = useDispatch<AppDispatch>();
 
     // Auth state
-    const { user, admin, isLoggedIn, isAdmin, isLoading: authLoading } = useSelector((state: RootState) => state.auth);
+    const { isLoggedIn, isAdmin, isLoading: authLoading } = useSelector((state: RootState) => state.auth);
 
     // Admin state
     const { profile, clients, clientCount, loading, error } = useSelector((state: RootState) => state.admin);
@@ -143,57 +143,84 @@ const AdminDashboard = () => {
     // Fetch data on component mount
     useEffect(() => {
         // Check if we have a token but no authenticated user
-        const accessToken = localStorage.getItem('accessToken');
-        if (accessToken && !isLoggedIn) {
-            // Get data from token (you could use a JWT decoder library)
-            try {
-                // Basic attempt to validate the token by making a request
-                axios.get('http://localhost:8000/api/v1/admin/current-admin', {
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`
-                    },
-                    withCredentials: true
-                })
-                    .then(response => {
-                        // Set auth state if successful
-                        dispatch(setAuth({
-                            isLoggedIn: true,
-                            user: {
-                                ...response.data.data,
-                                role: 'Admin'
-                            }
-                        }));
-                    })
-                    .catch(err => {
-                        console.error("Token validation error:", err);
-                        localStorage.removeItem('accessToken');
+        const checkAuth = async () => {
+            const accessToken = localStorage.getItem('accessToken');
+            console.log("Access Token:", accessToken);
+            console.log("Is Logged In:", isLoggedIn);
+            if (accessToken && !isLoggedIn) {
+                try {
+                    // Set a loading state first to prevent redirect
+                    dispatch({ type: 'auth/setLoading', payload: true });
+                    console.log("authLoading: ", authLoading);
+                    const response = await axiosInstance.get('/admin/current-admin', {
+                        headers: {
+                            Authorization: `Bearer ${accessToken}`
+                        },
+                        withCredentials: true
                     });
-            } catch (error) {
-                console.error("Error processing token:", error);
-                localStorage.removeItem('accessToken');
+                    console.log("Response: ", response.data);
+                    // Set auth state if successful
+                    dispatch(setAuth({
+                        isLoggedIn: true,
+                        isAdmin: true,
+                        user: {
+                            ...response.data.data,
+                            role: 'Admin'
+                        }
+                    }));
+                    console.log("User: ", response.data.data);
+                    // After auth is established, fetch profile data
+                    await dispatch(fetchAdminProfile()).unwrap()
+                        .then(adminData => {
+                            const expectedSlug = `${adminData.companyName.replace(/\s+/g, '-')}-${adminData.phoneNumber}`;
+                            console.log("Company slug:", companySlug);
+                            if (companySlug !== expectedSlug) {
+                                navigate(`/admin/${expectedSlug}/dashboard`, { replace: true });
+                            }
+                        });
+
+                    await dispatch(fetchClients()).unwrap();
+                } catch (error) {
+                    console.error("Token validation error:", error);
+                    localStorage.removeItem('accessToken');
+                    navigate('/login', { replace: true });
+                } finally {
+                    // Set loading to false when complete
+                    dispatch({ type: 'auth/setLoading', payload: false });
+                }
+            } else if (isLoggedIn && isAdmin) {
+                // If already logged in according to Redux, just fetch the data
+                dispatch(fetchAdminProfile())
+                    .unwrap()
+                    .then(adminData => {
+                        const expectedSlug = `${adminData.companyName.replace(/\s+/g, '-')}-${adminData.phoneNumber}`;
+                        if (companySlug !== expectedSlug) {
+                            navigate(`/admin/${expectedSlug}/dashboard`, { replace: true });
+                        }
+                    })
+                    .catch(error => {
+                        toast(error || 'Failed to load admin profile', {
+                            icon: <AlertTriangle className="h-4 w-4" />,
+                            cancel: true,
+                        });
+                    });
+
+                dispatch(fetchClients())
+                    .unwrap()
+                    .catch(error => {
+                        toast.error(error || 'Failed to load clients data');
+                    });
+            } else {
+                // Ensure loading is false when no auth is needed
+                dispatch({ type: 'auth/setLoading', payload: false });
+                navigate('/login', { replace: true });
+                toast('Session expired. Please log in again.', {
+                    cancel: true,
+                    richColors: true
+                })
             }
         }
-
-        if (isLoggedIn && isAdmin) {
-            dispatch(fetchAdminProfile())
-                .unwrap()
-                .then(adminData => {
-                    // Verify URL matches admin data
-                    const expectedSlug = `${adminData.companyName.replace(/\s+/g, '-')}-${adminData.phoneNumber}`;
-                    if (companySlug !== expectedSlug) {
-                        navigate(`/admin/${expectedSlug}/dashboard`, { replace: true });
-                    }
-                })
-                .catch(error => {
-                    toast.error(error || 'Failed to load admin profile');
-                });
-
-            dispatch(fetchClients())
-                .unwrap()
-                .catch(error => {
-                    toast.error(error || 'Failed to load clients data');
-                });
-        }
+        checkAuth();
     }, [dispatch, isLoggedIn, isAdmin, companySlug, navigate]);
 
     // Fetch accident data when mounting or switching to analytics tab
@@ -210,7 +237,7 @@ const AdminDashboard = () => {
 
         try {
             const accessToken = localStorage.getItem('accessToken');
-            const response = await axios.get('http://localhost:8000/api/v1/admin/accidents', {
+            const response = await axiosInstance.get('/admin/accidents', {
                 headers: {
                     Authorization: `Bearer ${accessToken}`
                 },
@@ -303,33 +330,33 @@ const AdminDashboard = () => {
             if (accidentFilterBy === 'drowsy') return matchesSearch && accident.isDrowsy && !accident.isOversped;
             if (accidentFilterBy === 'oversped') return matchesSearch && accident.isOversped && !accident.isDrowsy;
             if (accidentFilterBy === 'both') return matchesSearch && accident.isDrowsy && accident.isOversped;
-            
+
             return matchesSearch;
         })
         .sort((a, b) => {
             // Handle nested properties
             const key = accidentSortConfig.key as string;
-            
+
             if (key.includes('.')) {
                 const [parentKey, childKey] = key.split('.');
                 // Handle specifically the victimDetails object which is a known nested property
-                if (parentKey === 'victimDetails' && 
-                    'victimDetails' in a && 
+                if (parentKey === 'victimDetails' &&
+                    'victimDetails' in a &&
                     'victimDetails' in b) {
                     const aValue = a.victimDetails[childKey as keyof typeof a.victimDetails];
                     const bValue = b.victimDetails[childKey as keyof typeof b.victimDetails];
-                    
+
                     if (aValue < bValue) return accidentSortConfig.direction === 'asc' ? -1 : 1;
                     if (aValue > bValue) return accidentSortConfig.direction === 'asc' ? 1 : -1;
                     return 0;
                 }
                 return 0; // Default if not handling this specific nested path
             }
-            
+
             // Normal properties
             const aValue = a[key as keyof typeof a];
             const bValue = b[key as keyof typeof b];
-            
+
             if (aValue < bValue) return accidentSortConfig.direction === 'asc' ? -1 : 1;
             if (aValue > bValue) return accidentSortConfig.direction === 'asc' ? 1 : -1;
             return 0;
@@ -337,7 +364,7 @@ const AdminDashboard = () => {
 
     // Generate vehicle types for filter
     const vehicleTypes = [...new Set(clients.map(client => client.vehicleType))];
-    
+
     // Prepare data for accident chart
     const accidentChartData = groupAccidentsByDay(accidents);
     const accidentTypeData = getAccidentTypeCounts(accidents);
@@ -351,12 +378,12 @@ const AdminDashboard = () => {
             </div>
         );
     }
-    
-    if (!isLoggedIn || !isAdmin) {
-        // Redirect to login if not authenticated or not an admin
-        return <Navigate to="/login" replace />;
-    }
-    
+
+    // if (!isLoggedIn || !isAdmin) {
+    //     // Redirect to login if not authenticated or not an admin
+    //     return <Navigate to="/login" replace />;
+    // }
+
     return (
         <div className="container mx-auto py-8 px-4">
             <div className="flex justify-between items-center mb-8">
@@ -366,7 +393,7 @@ const AdminDashboard = () => {
                     Logout
                 </Button>
             </div>
-            
+
             {/* Company Info Card */}
             <Card className="mb-8">
                 <CardHeader>
@@ -389,7 +416,7 @@ const AdminDashboard = () => {
                                 </div>
                                 <span className="text-xl font-semibold">{profile.companyName}</span>
                             </div>
-                            
+
                             <div className="flex flex-col">
                                 <div className="flex items-center mb-2">
                                     <Phone className="h-5 w-5 mr-2 text-blue-500" />
@@ -397,7 +424,7 @@ const AdminDashboard = () => {
                                 </div>
                                 <span className="text-xl font-semibold">{profile.phoneNumber}</span>
                             </div>
-                            
+
                             <div className="flex flex-col">
                                 <div className="flex items-center mb-2">
                                     <Users className="h-5 w-5 mr-2 text-blue-500" />
@@ -413,7 +440,7 @@ const AdminDashboard = () => {
                     )}
                 </CardContent>
             </Card>
-            
+
             {/* Main Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="mb-6">
@@ -430,7 +457,7 @@ const AdminDashboard = () => {
                         </div>
                     </TabsTrigger>
                 </TabsList>
-                
+
                 {/* Dashboard Tab */}
                 <TabsContent value="dashboard">
                     <Card>
@@ -440,7 +467,7 @@ const AdminDashboard = () => {
                                     <CardTitle>Client Management</CardTitle>
                                     <CardDescription>View and manage all registered clients</CardDescription>
                                 </div>
-                                
+
                                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                                     <div className="relative">
                                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -451,7 +478,7 @@ const AdminDashboard = () => {
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                         />
                                     </div>
-                                    
+
                                     <Select value={filterBy} onValueChange={setFilterBy}>
                                         <SelectTrigger className="w-full sm:w-[180px]">
                                             <SelectValue placeholder="Filter by vehicle" />
@@ -481,7 +508,7 @@ const AdminDashboard = () => {
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead className="w-[80px]">Photo</TableHead>
-                                                    <TableHead 
+                                                    <TableHead
                                                         className="cursor-pointer hover:bg-gray-50"
                                                         onClick={() => handleSort('fullName')}
                                                     >
@@ -492,7 +519,7 @@ const AdminDashboard = () => {
                                                             </span>
                                                         )}
                                                     </TableHead>
-                                                    <TableHead 
+                                                    <TableHead
                                                         className="cursor-pointer hover:bg-gray-50"
                                                         onClick={() => handleSort('age')}
                                                     >
@@ -505,7 +532,7 @@ const AdminDashboard = () => {
                                                     </TableHead>
                                                     <TableHead>Gender</TableHead>
                                                     <TableHead>Phone Number</TableHead>
-                                                    <TableHead 
+                                                    <TableHead
                                                         className="cursor-pointer hover:bg-gray-50"
                                                         onClick={() => handleSort('vehicleType')}
                                                     >
@@ -561,13 +588,13 @@ const AdminDashboard = () => {
                                             </TableBody>
                                         </Table>
                                     </div>
-                                    
+
                                     <div className="mt-4 text-sm text-gray-500">
                                         Showing {filteredClients.length} of {clientCount} clients
                                     </div>
                                 </>
                             )}
-                            
+
                             {error && (
                                 <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-md text-sm">
                                     Error: {error}
@@ -576,7 +603,7 @@ const AdminDashboard = () => {
                         </CardContent>
                     </Card>
                 </TabsContent>
-                
+
                 {/* Analytics Tab */}
                 <TabsContent value="analytics">
                     <div className="space-y-6">
@@ -596,8 +623,8 @@ const AdminDashboard = () => {
                                     ) : accidents.length > 0 ? (
                                         <div className="h-80 w-full">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart 
-                                                    data={accidentChartData} 
+                                                <BarChart
+                                                    data={accidentChartData}
                                                     margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                                                 >
                                                     <CartesianGrid strokeDasharray="3 3" />
@@ -616,7 +643,7 @@ const AdminDashboard = () => {
                                     )}
                                 </CardContent>
                             </Card>
-                            
+
                             {/* Type Distribution Chart */}
                             <Card>
                                 <CardHeader>
@@ -639,9 +666,9 @@ const AdminDashboard = () => {
                                                         outerRadius={100}
                                                         fill="#8884d8"
                                                         dataKey="value"
-                                                        label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                                                     >
-                                                        {accidentTypeData.map((entry, index) => (
+                                                        {accidentTypeData.map((_, index) => (
                                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                         ))}
                                                     </Pie>
@@ -658,7 +685,7 @@ const AdminDashboard = () => {
                                 </CardContent>
                             </Card>
                         </div>
-                        
+
                         {/* Accidents Table Card */}
                         <Card>
                             <CardHeader>
@@ -667,7 +694,7 @@ const AdminDashboard = () => {
                                         <CardTitle>Accident Reports</CardTitle>
                                         <CardDescription>Detailed list of all reported accidents</CardDescription>
                                     </div>
-                                    
+
                                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                                         <div className="relative">
                                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -678,7 +705,7 @@ const AdminDashboard = () => {
                                                 onChange={(e) => setAccidentSearchTerm(e.target.value)}
                                             />
                                         </div>
-                                        
+
                                         <Select value={accidentFilterBy} onValueChange={setAccidentFilterBy}>
                                             <SelectTrigger className="w-full sm:w-[180px]">
                                                 <SelectValue placeholder="Filter by type" />
@@ -708,7 +735,7 @@ const AdminDashboard = () => {
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead className="w-[80px]">Victim</TableHead>
-                                                        <TableHead 
+                                                        <TableHead
                                                             className="cursor-pointer hover:bg-gray-50"
                                                             onClick={() => handleAccidentSort('victimDetails.fullName')}
                                                         >
@@ -720,7 +747,7 @@ const AdminDashboard = () => {
                                                             )}
                                                         </TableHead>
                                                         <TableHead>Vehicle</TableHead>
-                                                        <TableHead 
+                                                        <TableHead
                                                             className="cursor-pointer hover:bg-gray-50"
                                                             onClick={() => handleAccidentSort('speed')}
                                                         >
@@ -731,7 +758,7 @@ const AdminDashboard = () => {
                                                                 </span>
                                                             )}
                                                         </TableHead>
-                                                        <TableHead 
+                                                        <TableHead
                                                             className="cursor-pointer hover:bg-gray-50"
                                                             onClick={() => handleAccidentSort('createdAt')}
                                                         >
@@ -752,9 +779,9 @@ const AdminDashboard = () => {
                                                             <TableRow key={accident._id}>
                                                                 <TableCell>
                                                                     <Avatar>
-                                                                        <AvatarImage 
-                                                                            src={accident.victimDetails.photo} 
-                                                                            alt={accident.victimDetails.fullName} 
+                                                                        <AvatarImage
+                                                                            src={accident.victimDetails.photo}
+                                                                            alt={accident.victimDetails.fullName}
                                                                         />
                                                                         <AvatarFallback>
                                                                             {getInitials(accident.victimDetails.fullName)}
@@ -774,7 +801,7 @@ const AdminDashboard = () => {
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
-                                                                    <Badge 
+                                                                    <Badge
                                                                         variant={accident.isOversped ? "destructive" : "outline"}
                                                                     >
                                                                         {accident.speed} km/h
@@ -827,13 +854,13 @@ const AdminDashboard = () => {
                                                 </TableBody>
                                             </Table>
                                         </div>
-                                        
+
                                         <div className="mt-4 text-sm text-gray-500">
                                             Showing {filteredAccidents.length} of {accidents.length} accident reports
                                         </div>
                                     </>
                                 )}
-                                
+
                                 {accidentsError && (
                                     <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-md text-sm">
                                         Error: {accidentsError}

@@ -61,6 +61,12 @@ const userSchema = new Schema(
             required: true,
             trim: true
         },
+        emergencyContacts: [
+            {
+                type: String,
+                required: true,
+            }
+        ],
         photo: {
             type: String, // cloudinary url
             required: true,

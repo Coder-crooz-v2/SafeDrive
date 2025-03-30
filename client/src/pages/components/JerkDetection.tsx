@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { RootState } from '../../store/store';
 import {
     AlertDialog,
-    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -13,6 +12,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { AlertTriangleIcon } from 'lucide-react';
+import { axiosInstance } from '@/lib/axios';
 
 // Constants
 const JERK_THRESHOLD = 15; // Threshold for acceleration change to detect a jerk
@@ -25,7 +26,7 @@ const GPS_OPTIONS = {
 
 interface User {
     _id: string;
-    role: 'user' | 'admin' | string;
+    role: 'User' | 'Admin' | string;
     fullName: string;
     vehicleType: string;
     vehicleModel: string;
@@ -40,7 +41,7 @@ interface User {
     createdAt: string;
     updatedAt: string;
     __v: number;
-  }
+}
 
 type AccelerometerData = {
     x: number;
@@ -54,6 +55,7 @@ type Location = {
 };
 
 interface AccidentData {
+    _id?: string;
     location: number[];
     speed: number;
     isDrowsy: boolean;
@@ -72,7 +74,8 @@ const JerkDetection = () => {
     const [alertOpen, setAlertOpen] = useState<boolean>(false);
     const [isDrowsy, setIsDrowsy] = useState<boolean>(false);
     const [isOversped, setIsOversped] = useState<boolean>(false);
-    const [currentUser, setCurrentUser] = useState<any | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [accidentId, setAccidentId] = useState<string>("");
 
     // Refs
     const watchId = useRef<number | null>(null);
@@ -82,16 +85,6 @@ const JerkDetection = () => {
 
     // Sensitivity adjustments for testing in different environments
     const sensitivity = useRef<number>(1.0);
-
-    // Emergency contacts would normally come from the user profile or settings
-    const emergencyContacts = [
-        '+1234567890',
-        '+1987654321',
-        '+1122334455',
-        '+1555666777',
-        '+1999888777'
-    ];
-
 
     // Set up sensor monitoring when driving mode is enabled
     useEffect(() => {
@@ -136,7 +129,7 @@ const JerkDetection = () => {
                 GPS_OPTIONS
             );
         } else {
-            toast.error('Geolocation is not supported by this device');
+            toast('Geolocation is not supported by this device');
         }
 
         // Start accelerometer monitoring if available
@@ -150,7 +143,7 @@ const JerkDetection = () => {
                 }
             }, 200); // Check for jerks 5 times per second
         } else {
-            toast.error('Motion sensors are not available on this device');
+            toast('Motion sensors are not available on this device');
         }
     };
 
@@ -272,8 +265,8 @@ const JerkDetection = () => {
 
         // Send accident data to the server
         try {
-            const response = await axios.post(
-                'http://localhost:8000/api/v1/users/upload-accident',
+            const response = await axiosInstance.post(
+                '/users/upload-accident',
                 accidentData,
                 {
                     headers: {
@@ -284,14 +277,15 @@ const JerkDetection = () => {
 
             if (response.data.success) {
                 // Successfully reported accident
-                toast.success("Accident report sent to emergency services");
-
+                toast("Accident report sent to emergency services");
+                console.log("Accident data:", response.data);
+                setAccidentId(response.data.data._id); // Store accident data for SMS
                 // Send SMS to emergency contacts
                 await sendEmergencySMS(accidentData);
             }
         } catch (error) {
             console.error("Failed to report accident:", error);
-            toast.error("Failed to report accident to emergency services");
+            toast("Failed to report accident to emergency services");
         }
 
         // Reset jerk processing flag after a delay
@@ -299,43 +293,82 @@ const JerkDetection = () => {
             isProcessingJerk.current = false;
         }, 5000);
     };
+    const deleteAccidentData = async () => {
+        try {
+            if (accidentId) {
+                const id = accidentId;
+                const response = await axiosInstance.delete(
+                    `/users/delete-accident/${id}`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+                        }
+                    }
+                );
+
+                if (response.data.success) {
+                    toast("Removed most recent record");
+                }
+            } else {
+                toast("No accident record to delete");
+            }
+        } catch (error) {
+            console.error("Failed to delete accident data:", error);
+            toast("Failed to remove most recent record");
+        }
+    }
     // Send SMS to emergency contacts
     const sendEmergencySMS = async (accidentData: AccidentData) => {
         try {
-            const response = await axios.get('http://localhost:8000/api/v1/users/current-user', {
+            const response = await axiosInstance.get('/users/current-user', {
                 headers: {
                     Authorization: `Bearer ${localStorage.getItem('accessToken')}`
                 }
             });
             const user = response.data.data;
-            const locationLink = accidentData.location[0] !== 0
-                ? `https://maps.google.com/?q=${accidentData.location[0]},${accidentData.location[1]}`
-                : "Location unavailable";
-            if(user)
+            // const locationLink = accidentData.location[0] !== 0
+            //     ? `https://maps.google.com/?q=${accidentData.location[0]},${accidentData.location[1]}`
+            //     : "Location unavailable";
+            if (user)
                 setCurrentUser(user);
-            console.log(user)
-            const message = `EMERGENCY: Possible vehicle accident detected for ${user?.fullName}. Location: ${locationLink}. Speed: ${accidentData.speed.toFixed(1)} km/h. Please respond immediately!`;
+            // const message = `EMERGENCY: Possible vehicle accident detected for ${user?.fullName}. Location: ${locationLink}. Speed: ${accidentData.speed.toFixed(1)} km/h. Please respond immediately!`;
 
             // In a real application, you would use an SMS API service
             // Here we're just simulating the process
-            
-            await axios.post('http://localhost:8001/api/accident-alert', {
+
+            const smsResponse = await axios.post('http://localhost:8001/api/accident-alert', {
                 location: accidentData.location,
                 speed: accidentData.speed,
                 isDrowsy: accidentData.isDrowsy,
                 isOversped: accidentData.isOversped,
                 victimDetails: accidentData.victimDetails,
                 // Optionally include specific emergency contacts
-                // emergencyContacts: ['+1234567890', ...]
-              });
+                emergencyContacts: user?.emergencyContacts,
+            });
 
-            toast.success(`Alert messages sent to ${emergencyContacts.length} emergency contacts`);
+            toast(`Alert messages sent to ${smsResponse.data.sent_count} emergency contacts`);
         } catch (error) {
             console.error("Failed to send emergency SMS:", error);
-            toast.error("Failed to send emergency notifications");
+            toast("Failed to send emergency notifications", {
+                icon: <AlertTriangleIcon />
+            });
         }
     };
 
+    const handleOkayButton = () => {
+        setAlertOpen(false);
+        // Stop the alarm sound if it's playing
+        const audio = new Audio('/alarm.mp3');
+        audio.pause();
+        audio.currentTime = 0; // Reset to start
+        deleteAccidentData();
+        // Reset drowsiness and overspeeding states
+        setIsDrowsy(false);
+        setIsOversped(false);
+        // Reset accelerometer and location states
+        setAccelerometer(null);
+        setPreviousAccelerometer(null);
+    }
 
     // Simulate a jerk for testing purposes
     const simulateJerk = () => {
@@ -399,10 +432,10 @@ const JerkDetection = () => {
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>I'm Okay</AlertDialogCancel>
-                        <AlertDialogAction className="bg-red-600 hover:bg-red-700">
-                            Call Emergency Services
-                        </AlertDialogAction>
+                        <AlertDialogCancel onClick={handleOkayButton}>I'm Okay</AlertDialogCancel>
+                        <AlertDialogCancel className="bg-red-600 hover:bg-red-700">
+                            Close
+                        </AlertDialogCancel>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

@@ -51,7 +51,7 @@ export const fetchAccidentsNearby = createAsyncThunk(
   async ({ latitude, longitude }: { latitude: number, longitude: number, radius: number }) => {
     try {
       // In a real application, you'd make an API call here
-      // const response = await axios.get(`/api/accidents?lat=${latitude}&lng=${longitude}&radius=${radius}`);
+      // const response = await axiosInstance.get(`/api/accidents?lat=${latitude}&lng=${longitude}&radius=${radius}`);
       // return response.data;
       
       // For now, we'll use the sample data and filter based on proximity

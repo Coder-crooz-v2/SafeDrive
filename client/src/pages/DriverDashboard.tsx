@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
 import { RootState } from "../store/store";
 import {
     Card,
@@ -20,6 +19,7 @@ import DrivingMonitor from "./components/DriverMonitoring";
 import { Loader2, User, Car, Phone, Calendar, Edit, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import JerkDetection, { simulateAccident } from "./components/JerkDetection"
+import { axiosInstance } from "@/lib/axios";
 
 const DriverDashboard = () => {
     const navigate = useNavigate();
@@ -42,7 +42,7 @@ const DriverDashboard = () => {
             if (token && !isLoggedIn) {
                 try {
                     // Make a request to validate the token
-                    const response = await axios.get("http://localhost:8000/api/v1/users/current-user", {
+                    const response = await axiosInstance.get("/users/current-user", {
                         headers: {
                             Authorization: `Bearer ${token}`
                         }
@@ -81,7 +81,7 @@ const DriverDashboard = () => {
         const fetchUserData = async () => {
             try {
                 setLoading(true);
-                const response = await axios.get("http://localhost:8000/api/v1/users/current-user", {
+                const response = await axiosInstance.get("/users/current-user", {
                     withCredentials: true, // Important for sending cookies
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
@@ -115,7 +115,7 @@ const DriverDashboard = () => {
 
         // In a real app, you might want to make an API call like this:
         /*
-        axios.post("http://localhost:8000/api/v1/users/update-driving-status", 
+        axiosInstance.post("/users/update-driving-status", 
           { isDriving: checked },
           { withCredentials: true }
         ).then(() => {
@@ -142,7 +142,7 @@ const DriverDashboard = () => {
 
     const handleLogout = async () => {
         try {
-            const response = await axios.post("http://localhost:8000/api/v1/users/logout", {}, {
+            await axiosInstance.post("/users/logout", {}, {
                 withCredentials: true
             });
             // Clear local storage

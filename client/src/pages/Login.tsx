@@ -1,7 +1,6 @@
 import { useState, ChangeEvent } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,7 +68,7 @@ const Login = () => {
       
       const response = await dispatch(loginUser(payload));
       const userData = response.payload as any;
-      const dashboardUrl = `/user/${userData.data.user.fullName.replace(/\s+/g, '-')}-${userData.phoneNumber}/dashboard`;
+      const dashboardUrl = `/user/${userData.data.user.fullName.replace(/\s+/g, '-')}-${userData.data.user.phoneNumber}/dashboard`;
       toast("Login successful");
       navigate(dashboardUrl);
     } catch (error: any) {

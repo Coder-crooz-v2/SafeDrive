@@ -1,5 +1,5 @@
+import { axiosInstance } from '@/lib/axios';
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import axios from 'axios';
 
 // Types
 interface User {
@@ -22,7 +22,6 @@ interface AdminData {
 interface UserData {
   data: User;
 }
-
 export interface AuthState {
   user: User | null;
   admin: User | null;
@@ -45,13 +44,18 @@ const initialState: AuthState = {
 export const registerUser = createAsyncThunk(
   'auth/registerUser',
   async (userData: any, { rejectWithValue }) => {
-    try {
-      const response = await axios.post('http://localhost:8000/api/v1/users/register', userData);
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Registration failed');
+      try {
+        const response = await axiosInstance.post('/users/register', userData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        });
+        return response.data;
+      }
+      catch(error: any) {
+        return rejectWithValue(error.response?.data?.message || error.message || 'Registration failed');
+      }
     }
-  }
 );
 
 // Register admin
@@ -59,10 +63,17 @@ export const registerAdmin = createAsyncThunk(
   'auth/registerAdmin',
   async (adminData: any, { rejectWithValue }) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/v1/admin/register', adminData);
+      console.log(adminData);
+      const response = await axiosInstance.post('/admin/register', adminData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
       return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Registration failed');
+      return rejectWithValue(error.response?.data?.message || error.message || 'Registration failed');
     }
   }
 );
@@ -72,7 +83,7 @@ export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async (credentials: { email?: string; phoneNumber?: string; password: string }, { rejectWithValue }) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/v1/users/login', credentials, {
+      const response = await axiosInstance.post('/users/login', credentials, {
         withCredentials: true
       });
       return response.data as UserData;
@@ -87,7 +98,7 @@ export const loginAdmin = createAsyncThunk(
   'auth/loginAdmin',
   async (credentials: { email?: string; phoneNumber?: string; password: string }, { rejectWithValue }) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/v1/admin/login', credentials, {
+      const response = await axiosInstance.post('/admin/login', credentials, {
         withCredentials: true
       });
       return response.data as AdminData;
@@ -102,7 +113,7 @@ export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { rejectWithValue }) => {
     try {
-      await axios.post('http://localhost:8000/api/v1/users/logout', {}, {
+      await axiosInstance.post('/users/logout', {}, {
         withCredentials: true
       });
       // Clear any stored tokens
@@ -120,7 +131,7 @@ export const logoutAdmin = createAsyncThunk(
   'auth/logoutAdmin',
   async (_, { rejectWithValue }) => {
     try {
-      await axios.post('http://localhost:8000/api/v1/admin/logout', {}, {
+      await axiosInstance.post('/admin/logout', {}, {
         withCredentials: true
       });
       // Clear any stored tokens
@@ -140,13 +151,13 @@ export const checkAuthStatus = createAsyncThunk(
     try {
       // Try admin first
       try {
-        const adminResponse = await axios.get('http://localhost:8000/api/v1/admin/current-admin', {
+        const adminResponse = await axiosInstance.get('/admin/current-admin', {
           withCredentials: true
         });
         return { ...adminResponse.data.data, role: 'Admin' };
       } catch (adminError) {
         // If admin check fails, try user endpoint
-        const userResponse = await axios.get('http://localhost:8000/api/v1/users/current-user', {
+        const userResponse = await axiosInstance.get('/users/current-user', {
           withCredentials: true
         });
         return { ...userResponse.data.data, role: 'User' };
@@ -170,10 +181,21 @@ const authSlice = createSlice({
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
     },
-    setAuth: (state, action: PayloadAction<{isLoggedIn: boolean, user: User | null}>) => {
+    setAuth: (state, action: PayloadAction<{isLoggedIn: boolean, isAdmin?: Boolean, user: User | null}>) => {
       state.isLoggedIn = action.payload.isLoggedIn;
       state.user = action.payload.user;
       state.isAdmin = action.payload.user?.role === 'Admin';
+      state.isLoading = false;
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.isLoading = action.payload;
+    },
+    clearAuth: (state) => {
+      state.user = null;
+      state.admin = null;
+      state.isLoggedIn = false;
+      state.isAdmin = false;
+      state.isLoading = false;
     },
     clearAuthError: (state) => {
       state.error = null;
@@ -317,5 +339,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, setAuth, clearAuthError } = authSlice.actions;
+export const { logout, setAuth, setLoading, clearAuth, clearAuthError } = authSlice.actions;
 export default authSlice.reducer;

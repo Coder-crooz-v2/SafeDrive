@@ -1,5 +1,5 @@
+import { axiosInstance } from '@/lib/axios';
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import axios from 'axios';
 
 // Types
 interface AdminProfile {
@@ -45,7 +45,7 @@ export const fetchAdminProfile = createAsyncThunk(
   'admin/fetchProfile',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/admin/current-admin', {
+      const response = await axiosInstance.get('/admin/current-admin', {
         withCredentials: true
       });
       return response.data.data;
@@ -59,7 +59,7 @@ export const fetchClients = createAsyncThunk(
   'admin/fetchClients',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/admin/clients', {
+      const response = await axiosInstance.get('/admin/clients', {
         withCredentials: true
       });
       return response.data.data;

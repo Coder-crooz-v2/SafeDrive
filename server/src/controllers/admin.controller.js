@@ -40,7 +40,8 @@ const registerAdmin = asyncHandler( async (req, res) => {
 
     const {role, companyName, email, phoneNumber, password } = req.body
     //console.log("email: ", email);
-
+    console.log(req);
+    console.log(role, companyName, email, phoneNumber, password);
     if (
         !role || !companyName || !email || !phoneNumber || !password
     ) {
@@ -322,6 +323,16 @@ const fetchAccidentData = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, accidentData, "Accident data fetched successfully"))
 })
 
+const fetchAllCompanies = asyncHandler(async(req, res) => {
+    const companies = await Admin.find({}).select("companyName -_id")
+    if(!companies || companies.length === 0) {
+        throw new ApiError(404, "No companies found")
+    }
+    return res
+    .status(200)
+    .json(new ApiResponse(200, companies, "Companies fetched successfully"))
+})
+
 export {
     registerAdmin,
     loginAdmin,
@@ -331,5 +342,6 @@ export {
     getCurrentAdmin,
     updateAccountDetails,
     fetchClientsData,
-    fetchAccidentData
+    fetchAccidentData,
+    fetchAllCompanies
 }

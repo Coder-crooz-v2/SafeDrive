@@ -14,7 +14,7 @@ const DrowsinessMonitor = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  
+
   const [isConnected, setIsConnected] = useState(false);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitoringResults, setMonitoringResults] = useState({
@@ -26,63 +26,84 @@ const DrowsinessMonitor = () => {
   });
   const [webSocketError, setWebSocketError] = useState<string | null>(null);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
-  
+
   // Connect to WebSocket server
   useEffect(() => {
-    if(isDriving)
-        setIsMonitoring(true);
+    if (isDriving)
+      setIsMonitoring(true);
     else
-        setIsMonitoring(false);
+      setIsMonitoring(false);
   }, [isDriving]);
 
   useEffect(() => {
     if (isDriving && isMonitoring && !wsRef.current) {
-      try {
-        // Connect to the WebSocket server
-        console.log("Attempting to connect to WebSocket server...");
-        wsRef.current = new WebSocket('ws://localhost:8001/ws/drowsiness');
-        
-        wsRef.current.onopen = () => {
-          console.log('WebSocket connected successfully');
-          setIsConnected(true);
-          setWebSocketError(null);
-          toast.success("Connected to drowsiness monitoring system");
-        };
-        
-        wsRef.current.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.results) {
-              setMonitoringResults(data.results);
-            }
-            console.log("Received data from server");
-          } catch (error) {
-            console.error("Error parsing WebSocket message:", error);
-          }
-        };
-        
-        wsRef.current.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          setIsConnected(false);
-          setWebSocketError("Failed to connect to monitoring server. Is the Python backend running?");
-          toast.error("Failed to connect to monitoring server");
-        };
-        
-        wsRef.current.onclose = (event) => {
-          console.log('WebSocket disconnected:', event.code, event.reason);
-          setIsConnected(false);
-          wsRef.current = null;
+      let reconnectAttempts = 0;
+      const maxReconnectAttempts = 3;
+
+      const connectWebSocket = () => {
+        try {
+          console.log("Attempting to connect to WebSocket server...");
+          wsRef.current = new WebSocket("ws://localhost:8001/ws/drowsiness");
+
+          wsRef.current.onopen = () => {
+            console.log('WebSocket connected successfully');
+            setIsConnected(true);
+            setWebSocketError(null);
+            reconnectAttempts = 0; // Reset attempts on successful connection
+            toast.success("Connected to drowsiness monitoring system");
+          };
           
-          if (event.code !== 1000) { // Normal closure
-            setWebSocketError(`Connection closed (${event.code}). Please restart monitoring.`);
-          }
-        };
-      } catch (error) {
-        console.error("Error setting up WebSocket:", error);
-        setWebSocketError("Failed to setup WebSocket connection");
-      }
+          wsRef.current.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              // Update monitoring results with data from the server
+              setMonitoringResults({
+                isDrowsy: data.is_drowsy || false,
+                earValue: data.ear || 0,
+                drowsinessPercentage: data.drowsiness_percentage || 0,
+                alertSent: data.alert_sent || false,
+                hasDetectedFace: data.face_detected || false
+              });
+              
+              // Optional: Handle drowsiness alerts
+              if (data.is_drowsy && !monitoringResults.alertSent) {
+                toast.error("Drowsiness detected! Please take a break.", {
+                  duration: 5000,
+                });
+              }
+            } catch (error) {
+              console.error("Error processing WebSocket message:", error);
+            }
+          };
+
+          wsRef.current.onclose = (event) => {
+            console.log('WebSocket disconnected:', event.code, event.reason);
+            setIsConnected(false);
+            wsRef.current = null;
+
+            if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) { // Normal closure
+              // Auto-reconnect after delay (exponential backoff)
+              const reconnectDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+              reconnectAttempts++;
+
+              console.log(`Attempting to reconnect in ${reconnectDelay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+              setTimeout(connectWebSocket, reconnectDelay);
+
+              setWebSocketError(`Connection lost. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`);
+            } else if (reconnectAttempts >= maxReconnectAttempts) {
+              setWebSocketError(`Connection failed after ${maxReconnectAttempts} attempts. Please try again later.`);
+            }
+          };
+        } catch (error) {
+          console.error("Error setting up WebSocket:", error);
+          setWebSocketError("Failed to setup WebSocket connection");
+        }
+      };
+
+      connectWebSocket();
     }
-    
+
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -91,12 +112,12 @@ const DrowsinessMonitor = () => {
       }
     };
   }, [isDriving, isMonitoring]);
-  
+
   // Start video stream when monitoring is enabled
   useEffect(() => {
     if (isDriving && isMonitoring) {
       // Start webcam with higher quality
-      navigator.mediaDevices.getUserMedia({ 
+      navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
           height: { ideal: 480 },
@@ -124,7 +145,7 @@ const DrowsinessMonitor = () => {
         videoRef.current.srcObject = null;
       }
     }
-    
+
     return () => {
       if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop());
@@ -132,13 +153,13 @@ const DrowsinessMonitor = () => {
       }
     };
   }, [isMonitoring, isDriving]);
-  
+
   // Send video frames to the WebSocket server
   useEffect(() => {
     if (!isConnected || !isMonitoring || !isDriving) return;
-    
+
     console.log("Setting up frame sending interval...");
-    
+
     const interval = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
         // Check if video is actually playing and has dimensions
@@ -146,20 +167,20 @@ const DrowsinessMonitor = () => {
           console.log("Video not ready yet, waiting...");
           return;
         }
-        
+
         const context = canvasRef.current.getContext('2d');
         if (context) {
           try {
             // Set canvas dimensions to match video
             canvasRef.current.width = videoRef.current.videoWidth;
             canvasRef.current.height = videoRef.current.videoHeight;
-            
+
             // Draw video frame to canvas
             context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-            
+
             // Get base64 encoded image data with higher quality
             const imageData = canvasRef.current.toDataURL('image/jpeg', 0.9);
-            
+
             // Send to WebSocket server
             wsRef.current.send(JSON.stringify({ frame: imageData }));
           } catch (error) {
@@ -168,10 +189,10 @@ const DrowsinessMonitor = () => {
         }
       }
     }, 150); // Approximately 6-7 fps
-    
+
     return () => clearInterval(interval);
   }, [isConnected, isMonitoring, isDriving]);
-  
+
   const reconnect = () => {
     if (wsRef.current) {
       wsRef.current.close();
@@ -179,17 +200,17 @@ const DrowsinessMonitor = () => {
     }
     setIsConnected(false);
     setWebSocketError(null);
-    
+
     // Short delay before reconnecting
     setTimeout(() => {
       setIsMonitoring(true);
     }, 500);
   };
-  
+
   if (!isDriving) {
     return null; // Don't show when not driving
   }
-  
+
   // Determine alert level for status indicators
   const getAlertLevel = () => {
     if (monitoringResults.isDrowsy) return "high";
@@ -197,9 +218,9 @@ const DrowsinessMonitor = () => {
     if (monitoringResults.drowsinessPercentage > 20) return "low";
     return "none";
   };
-  
+
   const alertLevel = getAlertLevel();
-  
+
   return (
     <Card className={`mt-4 ${alertLevel === 'high' ? 'border-red-500 border-2' : ''}`}>
       <CardHeader>
@@ -207,7 +228,7 @@ const DrowsinessMonitor = () => {
           <CardTitle>Drowsiness Monitoring</CardTitle>
           <div className="flex space-x-2">
             {isMonitoring && !isConnected && (
-              <Button 
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={reconnect}
@@ -219,7 +240,7 @@ const DrowsinessMonitor = () => {
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         {isMonitoring ? (
           <div className="space-y-4">
@@ -235,51 +256,51 @@ const DrowsinessMonitor = () => {
                       </p>
                     </div>
                   ) : null}
-                  
-                  <video 
+
+                  <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
                     className="w-full h-auto"
                   />
-                  
+
                   {/* Status Indicators */}
                   <div className="absolute top-2 right-2 flex space-x-2">
-                    <Badge 
+                    <Badge
                       variant={isConnected ? "default" : "destructive"}
                       className={`${!isConnected && "animate-pulse"}`}
                     >
                       {isConnected ? "Connected" : "Disconnected"}
                     </Badge>
-                    
+
                     {isConnected && monitoringResults.hasDetectedFace && (
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className={
                           alertLevel === "high" ? "bg-red-100 text-red-700 border-red-300" :
-                          alertLevel === "medium" ? "bg-amber-100 text-amber-700 border-amber-300" :
-                          "bg-green-100 text-green-700 border-green-300"
+                            alertLevel === "medium" ? "bg-amber-100 text-amber-700 border-amber-300" :
+                              "bg-green-100 text-green-700 border-green-300"
                         }
                       >
                         {
                           alertLevel === "high" ? "Drowsy!" :
-                          alertLevel === "medium" ? "Drowsy Warning" :
-                          alertLevel === "low" ? "Slightly Drowsy" :
-                          "Alert"
+                            alertLevel === "medium" ? "Drowsy Warning" :
+                              alertLevel === "low" ? "Slightly Drowsy" :
+                                "Alert"
                         }
                       </Badge>
                     )}
                   </div>
-                  
+
                   {/* Face Detection Indicator */}
                   {isConnected && (
                     <div className="absolute bottom-2 left-2">
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className={`
-                          ${monitoringResults.hasDetectedFace 
-                            ? "bg-green-100 text-green-700 border-green-300" 
+                          ${monitoringResults.hasDetectedFace
+                            ? "bg-green-100 text-green-700 border-green-300"
                             : "bg-amber-100 text-amber-700 border-amber-300 animate-pulse"}
                         `}
                       >
@@ -287,7 +308,7 @@ const DrowsinessMonitor = () => {
                       </Badge>
                     </div>
                   )}
-                  
+
                   {/* EAR Value Indicator */}
                   {isConnected && monitoringResults.hasDetectedFace && (
                     <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
@@ -295,11 +316,11 @@ const DrowsinessMonitor = () => {
                     </div>
                   )}
                 </div>
-                
+
                 {/* Hidden canvas for frame capture */}
                 <canvas ref={canvasRef} className="hidden" />
               </div>
-              
+
               {/* Drowsiness Stats */}
               <div className="space-y-4">
                 {isConnected ? (
@@ -318,52 +339,50 @@ const DrowsinessMonitor = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* EAR Value */}
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <div className="flex justify-between mb-1">
                         <span className="text-sm font-medium">Eye Aspect Ratio (EAR)</span>
-                        <span 
-                          className={`text-sm font-medium ${
-                            monitoringResults.earValue < EYE_AR_THRESH ? 'text-red-500' : 'text-green-500'
-                          }`}
+                        <span
+                          className={`text-sm font-medium ${monitoringResults.earValue < EYE_AR_THRESH ? 'text-red-500' : 'text-green-500'
+                            }`}
                         >
                           {monitoringResults.earValue.toFixed(2)}
                         </span>
                       </div>
-                      <Progress 
-                        value={monitoringResults.earValue * 100} 
+                      <Progress
+                        value={monitoringResults.earValue * 100}
                         max={50}
-                        className={monitoringResults.earValue < EYE_AR_THRESH ? 'bg-red-100' : 'bg-gray-100'} 
+                        className={monitoringResults.earValue < EYE_AR_THRESH ? 'bg-red-100' : 'bg-gray-100'}
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         When below {EYE_AR_THRESH}, eyes are considered closed
                       </p>
                     </div>
-                    
+
                     {/* Drowsiness Percentage */}
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <div className="flex justify-between mb-1">
                         <span className="text-sm font-medium">Drowsiness Level</span>
-                        <span 
-                          className={`text-sm font-medium ${
-                            monitoringResults.drowsinessPercentage > 50 ? 'text-red-500' : 
-                            monitoringResults.drowsinessPercentage > 20 ? 'text-amber-500' : 'text-green-500'
-                          }`}
+                        <span
+                          className={`text-sm font-medium ${monitoringResults.drowsinessPercentage > 50 ? 'text-red-500' :
+                              monitoringResults.drowsinessPercentage > 20 ? 'text-amber-500' : 'text-green-500'
+                            }`}
                         >
                           {monitoringResults.drowsinessPercentage.toFixed(0)}%
                         </span>
                       </div>
-                      <Progress 
-                        value={monitoringResults.drowsinessPercentage} 
+                      <Progress
+                        value={monitoringResults.drowsinessPercentage}
                         className={
-                          monitoringResults.drowsinessPercentage > 75 ? 'bg-red-500' : 
-                          monitoringResults.drowsinessPercentage > 50 ? 'bg-amber-500' : 
-                          monitoringResults.drowsinessPercentage > 0 ? 'bg-amber-300' : 'bg-green-500'
+                          monitoringResults.drowsinessPercentage > 75 ? 'bg-red-500' :
+                            monitoringResults.drowsinessPercentage > 50 ? 'bg-amber-500' :
+                              monitoringResults.drowsinessPercentage > 0 ? 'bg-amber-300' : 'bg-green-500'
                         }
                       />
                     </div>
-                    
+
                     {/* Drowsiness Alert */}
                     {monitoringResults.isDrowsy && (
                       <Alert variant="destructive" className="animate-pulse">
@@ -383,12 +402,8 @@ const DrowsinessMonitor = () => {
                 ) : (
                   <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-500">
                     <h3 className="font-medium mb-2">Connection Status</h3>
-                    <p>Cannot connect to the drowsiness detection server.</p>
-                    <p className="mt-2">Make sure the Python backend is running on port 8001.</p>
-                    <code className="block mt-2 bg-gray-100 p-2 rounded text-xs">
-                      python drowsiness_server.py
-                    </code>
-                    
+                    <p>Cannot connect to the server.</p>
+
                     <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-lg text-sm">
                       <p className="font-medium mb-1">Even without server connection:</p>
                       <p>The live camera feed is still visible so you can monitor yourself.</p>

@@ -8,7 +8,9 @@ import {
     getCurrentUser, 
     updateUserPhoto,
     updateAccountDetails,
-    uploadAccidentData
+    uploadAccidentData,
+    fetchEmergencyContacts,
+    deleteAccidentData
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -36,5 +38,6 @@ router.route("/current-user").get(verifyJWT, getCurrentUser)
 router.route("/update-account").patch(verifyJWT, updateAccountDetails)
 router.route("/photo").patch(verifyJWT, upload.single("photo"), updateUserPhoto)
 router.route("/upload-accident").post(verifyJWT, uploadAccidentData)
-
+router.route("/fetch-emergency-contacts").get(verifyJWT, fetchEmergencyContacts)
+router.route("/delete-accident/:id").delete(verifyJWT, deleteAccidentData)
 export default router

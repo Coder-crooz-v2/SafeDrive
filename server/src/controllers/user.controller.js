@@ -39,11 +39,11 @@ const registerUser = asyncHandler( async (req, res) => {
     // return res
 
 
-    const {role, fullName, vehicleType, vehicleModel, vehicleNumber, licenseNumber, age, gender, serviceProvider, email, phoneNumber, password } = req.body
+    const {role, fullName, vehicleType, vehicleModel, vehicleNumber, licenseNumber, age, gender, serviceProvider, email, phoneNumber, emergencyContacts, password } = req.body
     //console.log("email: ", email);
 
     if (
-        [role, fullName, email, vehicleType, vehicleModel, vehicleNumber, licenseNumber, phoneNumber, gender, password].some((field) => field?.trim() === "") || !age || !serviceProvider
+        [role, fullName, email, vehicleType, vehicleModel, vehicleNumber, licenseNumber, phoneNumber, gender, password].some((field) => field?.trim() === "") || !age || !serviceProvider || emergencyContacts?.length === 0
     ) {
         console.log(role, fullName, email, vehicleType, vehicleModel, vehicleNumber, licenseNumber, age, gender, serviceProvider, phoneNumber, password)
         throw new ApiError(400, "All fields are required")
@@ -87,7 +87,8 @@ const registerUser = asyncHandler( async (req, res) => {
         gender, 
         serviceProvider: existedServiceProvider._id,
         email, 
-        phoneNumber, 
+        phoneNumber,
+        emergencyContacts,
         photo: photo.url,
         password
     })
@@ -365,6 +366,42 @@ const uploadAccidentData = asyncHandler(async(req, res) => {
     .json(new ApiResponse(201, accidentData, "Accident data uploaded successfully"))    
 })
 
+const fetchEmergencyContacts = asyncHandler(async(req, res) => {
+    const user = req.user
+
+    if (!user) {
+        throw new ApiError(404, "User not found")
+    }
+
+    const emergencyContacts = user.emergencyContacts
+
+    if (!emergencyContacts || emergencyContacts.length === 0) {
+        throw new ApiError(404, "No emergency contacts found")
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, emergencyContacts, "Emergency contacts fetched successfully"))
+})
+
+const deleteAccidentData = asyncHandler(async(req, res) => {
+    const {id} = req.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(400, "Invalid accident data id")
+    }
+
+    const accidentData = await AccidentData.findByIdAndDelete(id)
+
+    if (!accidentData) {
+        throw new ApiError(404, "Accident data not found")
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Accident data deleted successfully"))
+})
+
 export {
     registerUser,
     loginUser,
@@ -374,5 +411,7 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserPhoto,
-    uploadAccidentData
+    uploadAccidentData,
+    fetchEmergencyContacts,
+    deleteAccidentData
 }

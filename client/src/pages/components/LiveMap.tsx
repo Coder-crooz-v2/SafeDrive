@@ -5,7 +5,7 @@ import { Icon, LatLngBounds, Map } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
-import { Loader2, MapPin, AlertTriangle, Navigation } from 'lucide-react';
+import { Loader2, AlertTriangle, Navigation } from 'lucide-react';
 import { RootState, AppDispatch } from '../../store/store';
 import { fetchAccidentsNearby } from '../../redux/slices/accidentSlice';
 import { updateDrivingData } from '../../redux/slices/drivingSlice';
@@ -223,8 +223,10 @@ const LiveMap = () => {
               style={{ height: '100%', width: '100%' }}
               ref={mapRef}
               whenReady={() => {
-                if(mapRef.current) 
+                if(mapRef.current) {
                     setMapBounds(mapRef.current.getBounds());
+                    console.log(mapBounds)
+                }
               }}
             >
               <TileLayer

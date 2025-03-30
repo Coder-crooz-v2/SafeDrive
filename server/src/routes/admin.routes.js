@@ -8,7 +8,8 @@ import {
     getCurrentAdmin,
     updateAccountDetails,
     fetchClientsData,
-    fetchAccidentData
+    fetchAccidentData,
+    fetchAllCompanies
 } from "../controllers/admin.controller.js";
 import { verifyJWT } from "../middlewares/auth.admin.middleware.js";
 
@@ -27,5 +28,6 @@ router.route("/current-admin").get(verifyJWT, getCurrentAdmin)
 router.route("/update-account").patch(verifyJWT, updateAccountDetails)
 router.route("/clients").get(verifyJWT, fetchClientsData)
 router.route("/accidents").get(verifyJWT, fetchAccidentData)
+router.route("/companies").get(fetchAllCompanies)
 
 export default router

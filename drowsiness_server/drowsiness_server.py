@@ -48,7 +48,8 @@ class AccidentAlert(BaseModel):
 # Add CORS middleware to allow requests from your React app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development, use specific origin in production
+    allow_origins=["https://safedrive.onrender.com",
+    "http://localhost:3000"],  # For development, use specific origin in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,8 +68,6 @@ SHAPE_PREDICTOR_PATH = "shape_predictor_68_face_landmarks.dat"
 # Check if the shape predictor file exists
 if not os.path.exists(SHAPE_PREDICTOR_PATH):
     logger.error(f"Shape predictor file not found at {SHAPE_PREDICTOR_PATH}")
-    logger.info("Please download it from: https://github.com/davisking/dlib-models/blob/master/shape_predictor_68_face_landmarks.dat.bz2")
-    logger.info("Extract it and place it in the same directory as this script")
 else:
     logger.info(f"Shape predictor file found at {SHAPE_PREDICTOR_PATH}")
 
@@ -385,4 +384,4 @@ if __name__ == "__main__":
     print("WebSocket endpoint at ws://localhost:8001/ws/drowsiness")
     
     port = int(os.getenv("PORT", 8001))
-    uvicorn.run("drowsiness_server:app", host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run("drowsiness_server:app", host="0.0.0.0", port=port, log_level="info")
