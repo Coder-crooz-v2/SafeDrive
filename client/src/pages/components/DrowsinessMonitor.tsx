@@ -9,11 +9,15 @@ import { RootState } from '../../store/store';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
+// Constants from Python backend
+const EYE_AR_THRESH = 0.3;
+
 const DrowsinessMonitor = () => {
   const { isDriving } = useSelector((state: RootState) => state.driving);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const frameIntervalRef = useRef<number | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -26,6 +30,11 @@ const DrowsinessMonitor = () => {
   });
   const [webSocketError, setWebSocketError] = useState<string | null>(null);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const frameRate = 6;
+  
+  // For FPS calculation
+  const frameTimesRef = useRef<number[]>([]);
+  const [fps, setFps] = useState(0);
 
   // Connect to WebSocket server
   useEffect(() => {
@@ -35,6 +44,7 @@ const DrowsinessMonitor = () => {
       setIsMonitoring(false);
   }, [isDriving]);
 
+  // WebSocket connection management
   useEffect(() => {
     if (isDriving && isMonitoring && !wsRef.current) {
       let reconnectAttempts = 0;
@@ -43,7 +53,13 @@ const DrowsinessMonitor = () => {
       const connectWebSocket = () => {
         try {
           console.log("Attempting to connect to WebSocket server...");
-          wsRef.current = new WebSocket("ws://localhost:8001/ws/drowsiness");
+          // Use the configured endpoint from your API config 
+          // This should handle env differences (local vs production)
+          const wsUrl = process.env.NODE_ENV === 'production' 
+            ? "wss://safedrive-drowsiness-server.onrender.com/ws/drowsiness"
+            : "ws://localhost:8001/ws/drowsiness";
+            
+          wsRef.current = new WebSocket(wsUrl);
 
           wsRef.current.onopen = () => {
             console.log('WebSocket connected successfully');
@@ -57,6 +73,7 @@ const DrowsinessMonitor = () => {
             try {
               const data = JSON.parse(event.data);
               
+              console.log(data)
               // Update monitoring results with data from the server
               setMonitoringResults({
                 isDrowsy: data.is_drowsy || false,
@@ -66,8 +83,17 @@ const DrowsinessMonitor = () => {
                 hasDetectedFace: data.face_detected || false
               });
               
-              // Optional: Handle drowsiness alerts
+              console.log(monitoringResults);
+              // Handle drowsiness alerts
               if (data.is_drowsy && !monitoringResults.alertSent) {
+                // Play alert sound if available
+                try {
+                  const alertSound = new Audio('/alert-sound.mp3');
+                  alertSound.play().catch(e => console.log("Could not play alert sound:", e));
+                } catch (soundError) {
+                  console.log("Audio playback error:", soundError);
+                }
+                
                 toast.error("Drowsiness detected! Please take a break.", {
                   duration: 5000,
                 });
@@ -82,6 +108,12 @@ const DrowsinessMonitor = () => {
             setIsConnected(false);
             wsRef.current = null;
 
+            // Stop sending frames if the connection is closed
+            if (frameIntervalRef.current) {
+              clearInterval(frameIntervalRef.current);
+              frameIntervalRef.current = null;
+            }
+
             if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) { // Normal closure
               // Auto-reconnect after delay (exponential backoff)
               const reconnectDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
@@ -94,6 +126,11 @@ const DrowsinessMonitor = () => {
             } else if (reconnectAttempts >= maxReconnectAttempts) {
               setWebSocketError(`Connection failed after ${maxReconnectAttempts} attempts. Please try again later.`);
             }
+          };
+          
+          wsRef.current.onerror = (error) => {
+            console.error("WebSocket error:", error);
+            setWebSocketError("Connection error occurred. Check if the server is running.");
           };
         } catch (error) {
           console.error("Error setting up WebSocket:", error);
@@ -109,6 +146,11 @@ const DrowsinessMonitor = () => {
         wsRef.current.close();
         wsRef.current = null;
         setIsConnected(false);
+      }
+      
+      if (frameIntervalRef.current) {
+        clearInterval(frameIntervalRef.current);
+        frameIntervalRef.current = null;
       }
     };
   }, [isDriving, isMonitoring]);
@@ -159,18 +201,22 @@ const DrowsinessMonitor = () => {
     if (!isConnected || !isMonitoring || !isDriving) return;
 
     console.log("Setting up frame sending interval...");
-
-    const interval = setInterval(() => {
+    // Calculate interval in milliseconds based on desired frame rate
+    const intervalMs = Math.floor(1000 / frameRate);
+    
+    frameIntervalRef.current = window.setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
         // Check if video is actually playing and has dimensions
         if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
-          console.log("Video not ready yet, waiting...");
           return;
         }
 
         const context = canvasRef.current.getContext('2d');
         if (context) {
           try {
+            // Capture frame start time for FPS calculation
+            const frameStartTime = performance.now();
+            
             // Set canvas dimensions to match video
             canvasRef.current.width = videoRef.current.videoWidth;
             canvasRef.current.height = videoRef.current.videoHeight;
@@ -178,20 +224,65 @@ const DrowsinessMonitor = () => {
             // Draw video frame to canvas
             context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
 
-            // Get base64 encoded image data with higher quality
-            const imageData = canvasRef.current.toDataURL('image/jpeg', 0.9);
+            // Get base64 encoded image data - adjust quality based on connection
+            // Lower quality (0.7) for better performance, higher (0.9) for better detection
+            const imageData = canvasRef.current.toDataURL('image/jpeg', 0.8);
 
+            // Add face annotations to the video feed if there's a detection
+            if (monitoringResults.hasDetectedFace) {
+              // Draw a border around the video that changes color based on alert level
+              const borderColor = monitoringResults.isDrowsy 
+                ? 'red' 
+                : monitoringResults.drowsinessPercentage > 50 
+                  ? 'orange' 
+                  : 'green';
+                  
+              context.strokeStyle = borderColor;
+              context.lineWidth = 5;
+              context.strokeRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+              
+              // Optionally draw text indicating the EAR value
+              context.font = 'bold 16px Arial';
+              context.fillStyle = 'white';
+              context.fillRect(5, 5, 120, 25);
+              context.fillStyle = monitoringResults.earValue < EYE_AR_THRESH ? 'red' : 'green';
+              context.fillText(`EAR: ${monitoringResults.earValue.toFixed(2)}`, 10, 22);
+            }
+            
             // Send to WebSocket server
             wsRef.current.send(JSON.stringify({ frame: imageData }));
+            
+            // Calculate and update FPS
+            const frameEndTime = performance.now();
+            const frameTime = frameEndTime - frameStartTime;
+            
+            // Keep last 10 frame times for moving average
+            frameTimesRef.current.push(frameTime);
+            if (frameTimesRef.current.length > 10) {
+              frameTimesRef.current.shift();
+            }
+            
+            // Calculate average frame time and FPS
+            if (frameTimesRef.current.length > 0) {
+              const averageFrameTime = frameTimesRef.current.reduce((sum, time) => sum + time, 0) / 
+                frameTimesRef.current.length;
+              const calculatedFps = Math.round(1000 / averageFrameTime);
+              setFps(calculatedFps);
+            }
           } catch (error) {
             console.error("Error capturing or sending frame:", error);
           }
         }
       }
-    }, 150); // Approximately 6-7 fps
+    }, intervalMs);
 
-    return () => clearInterval(interval);
-  }, [isConnected, isMonitoring, isDriving]);
+    return () => {
+      if (frameIntervalRef.current) {
+        clearInterval(frameIntervalRef.current);
+        frameIntervalRef.current = null;
+      }
+    };
+  }, [isConnected, isMonitoring, isDriving, frameRate]);
 
   const reconnect = () => {
     if (wsRef.current) {
@@ -200,6 +291,15 @@ const DrowsinessMonitor = () => {
     }
     setIsConnected(false);
     setWebSocketError(null);
+    
+    // Reset monitoring results
+    setMonitoringResults({
+      isDrowsy: false,
+      earValue: 0,
+      drowsinessPercentage: 0,
+      alertSent: false,
+      hasDetectedFace: false
+    });
 
     // Short delay before reconnecting
     setTimeout(() => {
@@ -227,14 +327,14 @@ const DrowsinessMonitor = () => {
         <div className="flex justify-between items-center">
           <CardTitle>Drowsiness Monitoring</CardTitle>
           <div className="flex space-x-2">
-            {isMonitoring && !isConnected && (
+            {isMonitoring && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={reconnect}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
-                Reconnect
+                {isConnected ? "Restart" : "Reconnect"}
               </Button>
             )}
           </div>
@@ -312,7 +412,7 @@ const DrowsinessMonitor = () => {
                   {/* EAR Value Indicator */}
                   {isConnected && monitoringResults.hasDetectedFace && (
                     <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
-                      EAR: {monitoringResults.earValue.toFixed(2)}
+                      EAR: {monitoringResults.earValue.toFixed(2)} | FPS: {fps}
                     </div>
                   )}
                 </div>
@@ -336,6 +436,14 @@ const DrowsinessMonitor = () => {
                         <div className="flex items-center">
                           <div className={`h-3 w-3 rounded-full mr-2 ${monitoringResults.hasDetectedFace ? 'bg-green-500' : 'bg-amber-500'}`}></div>
                           <span className="text-sm">Face Detection</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`h-3 w-3 rounded-full mr-2 ${fps >= 5 ? 'bg-green-500' : fps >= 3 ? 'bg-amber-500' : 'bg-red-500'}`}></div>
+                          <span className="text-sm">Performance ({fps} FPS)</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`h-3 w-3 rounded-full mr-2 ${monitoringResults.isDrowsy ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                          <span className="text-sm">Drowsiness Alert</span>
                         </div>
                       </div>
                     </div>
@@ -408,6 +516,16 @@ const DrowsinessMonitor = () => {
                       <p className="font-medium mb-1">Even without server connection:</p>
                       <p>The live camera feed is still visible so you can monitor yourself.</p>
                     </div>
+                    
+                    <div className="mt-4">
+                      <p className="font-medium mb-1">Troubleshooting:</p>
+                      <ul className="list-disc list-inside text-xs space-y-1">
+                        <li>Make sure the server is running</li>
+                        <li>Check your internet connection</li>
+                        <li>Try restarting the application</li>
+                        <li>Make sure your camera permissions are enabled</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
               </div>
@@ -426,8 +544,5 @@ const DrowsinessMonitor = () => {
     </Card>
   );
 };
-
-// Constants from Python backend
-const EYE_AR_THRESH = 0.25;
 
 export default DrowsinessMonitor;

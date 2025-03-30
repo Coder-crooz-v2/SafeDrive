@@ -1,8 +1,7 @@
 import cv2
 import numpy as np
-import dlib
+import mediapipe as mp  # Replace dlib with mediapipe
 from scipy.spatial import distance as dist
-from imutils import face_utils
 import time
 import base64
 import json
@@ -15,7 +14,6 @@ import logging
 from twilio.rest import Client
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -56,35 +54,25 @@ app.add_middleware(
 )
 
 # Drowsiness detection parameters
-EYE_AR_THRESH = 0.25
+EYE_AR_THRESH = 0.3
 EYE_AR_CONSEC_FRAMES = 30
 COUNTER = 0
 ALARM_ON = False
 COOLDOWN_TIME = 300  # 5 minutes cooldown
 
-# Path to the shape predictor file
-SHAPE_PREDICTOR_PATH = "shape_predictor_68_face_landmarks.dat"
+# Initialize MediaPipe FaceMesh
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=False,
+    max_num_faces=1,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
 
-# Check if the shape predictor file exists
-if not os.path.exists(SHAPE_PREDICTOR_PATH):
-    logger.error(f"Shape predictor file not found at {SHAPE_PREDICTOR_PATH}")
-else:
-    logger.info(f"Shape predictor file found at {SHAPE_PREDICTOR_PATH}")
-
-# Initialize face detector and landmark predictor
-try:
-    detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor(SHAPE_PREDICTOR_PATH)
-    
-    # Get facial landmark indices
-    (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
-    (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
-    
-    logger.info("Successfully initialized dlib face detector and predictor")
-except Exception as e:
-    logger.error(f"Error initializing dlib: {e}")
-    detector = None
-    predictor = None
+# Define eye landmarks for MediaPipe (indexes are different from dlib)
+# These are the indexes for the eye landmarks in MediaPipe's 468 points model
+LEFT_EYE_INDEXES = [362, 385, 387, 263, 373, 380]
+RIGHT_EYE_INDEXES = [33, 160, 158, 133, 153, 144]
 
 # Time of last alert
 last_alert_time = 0
@@ -92,15 +80,32 @@ last_alert_time = 0
 # Connected clients
 connected_clients: List[WebSocket] = []
 
-# Calculate eye aspect ratio
-def eye_aspect_ratio(eye):
-    A = dist.euclidean(eye[1], eye[5])
-    B = dist.euclidean(eye[2], eye[4])
-    C = dist.euclidean(eye[0], eye[3])
-    ear = (A + B) / (2.0 * C)
+# Calculate eye aspect ratio using MediaPipe landmarks
+def eye_aspect_ratio(landmarks, eye_indexes):
+    # Extract eye points using the indexes
+    points = [landmarks[i] for i in eye_indexes]
+    
+    # Horizontal distance (eye width)
+    h_dist = dist.euclidean(
+        (points[0].x, points[0].y), 
+        (points[3].x, points[3].y)
+    )
+    
+    # Two vertical distances
+    v_dist1 = dist.euclidean(
+        (points[1].x, points[1].y), 
+        (points[5].x, points[5].y)
+    )
+    v_dist2 = dist.euclidean(
+        (points[2].x, points[2].y), 
+        (points[4].x, points[4].y)
+    )
+    
+    # Calculate EAR
+    ear = (v_dist1 + v_dist2) / (2.0 * h_dist)
     return ear
 
-# Send alerts to emergency contacts (mock function for development)
+# Send alerts to emergency contacts
 def send_alerts():
     logger.info("ALERT: Driver is drowsy! Sending notifications to emergency contacts")
     successful_sends = 0
@@ -151,7 +156,7 @@ def decode_base64_image(base64_img):
         logger.error(f"Error decoding base64 image: {e}")
         return None
 
-# Process frame for drowsiness detection
+# Process frame for drowsiness detection using MediaPipe
 def process_frame(frame):
     global COUNTER, ALARM_ON, last_alert_time
     
@@ -165,39 +170,59 @@ def process_frame(frame):
             "hasDetectedFace": False
         }
     
-    # Process the frame for drowsiness detection
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = detector(gray, 0)
+    # Convert to RGB for MediaPipe
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     
-    results = {
+    # Process the frame
+    results = face_mesh.process(frame_rgb)
+    
+    # Initialize result dictionary
+    detection_results = {
         "isDrowsy": False,
         "earValue": 0,
         "drowsinessPercentage": 0,
         "alertSent": False,
-        "hasDetectedFace": len(faces) > 0
+        "hasDetectedFace": False
     }
     
-    for face in faces:
-        # Get facial landmarks
-        shape = predictor(gray, face)
-        shape = face_utils.shape_to_np(shape)
+    # Check if face is detected
+    if results.multi_face_landmarks:
+        detection_results["hasDetectedFace"] = True
         
-        # Extract eye coordinates
-        leftEye = shape[lStart:lEnd]
-        rightEye = shape[rStart:rEnd]
+        # Get landmarks for the first face
+        face_landmarks = results.multi_face_landmarks[0]
         
-        # Calculate EAR
-        leftEAR = eye_aspect_ratio(leftEye)
-        rightEAR = eye_aspect_ratio(rightEye)
-        ear = (leftEAR + rightEAR) / 2.0
+        # Get frame dimensions for drawing
+        h, w, c = frame.shape
         
-        results["earValue"] = ear
+        # Draw eye landmarks for visualization
+        for idx in LEFT_EYE_INDEXES + RIGHT_EYE_INDEXES:
+            landmark = face_landmarks.landmark[idx]
+            x, y = int(landmark.x * w), int(landmark.y * h)
+            cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
         
-        # Draw the eye contours on the frame
-        leftEyeHull = cv2.convexHull(leftEye)
-        rightEyeHull = cv2.convexHull(rightEye)
-        cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
-        cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
+        # Calculate EAR for left and right eyes
+        left_ear = eye_aspect_ratio(face_landmarks.landmark, LEFT_EYE_INDEXES)
+        right_ear = eye_aspect_ratio(face_landmarks.landmark, RIGHT_EYE_INDEXES)
+        
+        # Average EAR
+        ear = (left_ear + right_ear) / 2.0
+        detection_results["earValue"] = ear
+        
+        # Draw eye contours and connections for visualization
+        def draw_eye(landmarks, indexes, color=(0, 255, 0)):
+            points = []
+            for idx in indexes:
+                landmark = landmarks.landmark[idx]
+                x, y = int(landmark.x * w), int(landmark.y * h)
+                points.append((x, y))
+            
+            points = np.array(points, dtype=np.int32)
+            cv2.polylines(frame, [points], True, color, 1)
+        
+        # Draw eye contours
+        draw_eye(face_landmarks, LEFT_EYE_INDEXES, (0, 255, 0))
+        draw_eye(face_landmarks, RIGHT_EYE_INDEXES, (0, 255, 0))
         
         # Add EAR text
         cv2.putText(frame, f"EAR: {ear:.2f}", (10, 30),
@@ -207,7 +232,7 @@ def process_frame(frame):
         if ear < EYE_AR_THRESH:
             COUNTER += 1
             drowsiness_percentage = min(100, (COUNTER / EYE_AR_CONSEC_FRAMES) * 100)
-            results["drowsinessPercentage"] = drowsiness_percentage
+            detection_results["drowsinessPercentage"] = drowsiness_percentage
             
             # Add drowsiness percentage text
             cv2.putText(frame, f"Drowsiness: {drowsiness_percentage:.0f}%", (10, 60),
@@ -215,7 +240,7 @@ def process_frame(frame):
             
             if COUNTER >= EYE_AR_CONSEC_FRAMES:
                 current_time = time.time()
-                results["isDrowsy"] = True
+                detection_results["isDrowsy"] = True
                 
                 # Add ALERT text
                 cv2.putText(frame, "DROWSINESS ALERT!", (10, 90),
@@ -229,19 +254,19 @@ def process_frame(frame):
                     # Send alerts
                     successful_sends = send_alerts()
                     logger.info(f"Successfully sent alerts to {successful_sends} contacts")
-                    results["alertSent"] = True
+                    detection_results["alertSent"] = True
         else:
             COUNTER = 0
             ALARM_ON = False
-            results["drowsinessPercentage"] = 0
+            detection_results["drowsinessPercentage"] = 0
     
     # Add face detection status text
-    face_text = "Face Detected" if results["hasDetectedFace"] else "No Face Detected"
-    color = (0, 255, 0) if results["hasDetectedFace"] else (0, 0, 255)
+    face_text = "Face Detected" if detection_results["hasDetectedFace"] else "No Face Detected"
+    color = (0, 255, 0) if detection_results["hasDetectedFace"] else (0, 0, 255)
     cv2.putText(frame, face_text, (frame.shape[1] - 200, 30),
         cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
     
-    return frame, results
+    return frame, detection_results
 
 # WebSocket endpoint to process video frames
 @app.websocket("/ws/drowsiness")
@@ -279,10 +304,16 @@ async def drowsiness_detection(websocket: WebSocket):
                     processed_frame_base64 = base64.b64encode(buffer).decode('utf-8')
                     
                     # Send the results and processed frame back to the client
-                    await websocket.send_json({
-                        "processedFrame": f"data:image/jpeg;base64,{processed_frame_base64}",
-                        "results": results
-                    })
+                    response = {
+                        "is_drowsy": results["isDrowsy"],
+                        "ear": results["earValue"],
+                        "drowsiness_percentage": results["drowsinessPercentage"],
+                        "alert_sent": results["alertSent"],
+                        "face_detected": results["hasDetectedFace"],
+                        "processedFrame": f"data:image/jpeg;base64,{processed_frame_base64}"
+                    }
+                    
+                    await websocket.send_json(response)
             except json.JSONDecodeError:
                 logger.error("Error decoding JSON data from client")
             except Exception as e:
@@ -374,12 +405,16 @@ def read_root():
         "message": "Drowsiness detection server is running",
         "status": "online",
         "connections": len(connected_clients),
-        "detector_status": "available" if detector is not None else "unavailable"
+        "detector_status": "available" if face_mesh is not None else "unavailable"
     }
+
+# For testing only: add a simple endpoint to test if the API is working
+@app.get("/api/ping")
+def ping():
+    return {"message": "pong", "timestamp": time.time()}
 
 if __name__ == "__main__":
     print("Starting drowsiness detection server...")
-    print("Make sure you have downloaded the shape_predictor_68_face_landmarks.dat file")
     print("Server will be available at http://localhost:8001")
     print("WebSocket endpoint at ws://localhost:8001/ws/drowsiness")
     
