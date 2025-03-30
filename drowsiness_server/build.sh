@@ -22,3 +22,4 @@ echo "Installed packages:"
 pip list
 
 echo "Build completed!"
+chmod +x build.sh
