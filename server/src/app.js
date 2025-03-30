@@ -40,4 +40,12 @@ import adminRouter from './routes/admin.routes.js'
 app.use("/api/v1/users", userRouter)
 app.use("/api/v1/admin", adminRouter)
 
+if(process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/dist')));
+
+  app.get('*', (req, res) => {
+      res.sendFile(path.resolve(__dirname, '../client/dist/index.html'));
+  });
+}
+
 export { app }
