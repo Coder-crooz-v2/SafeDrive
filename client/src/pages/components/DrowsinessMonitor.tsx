@@ -55,9 +55,7 @@ const DrowsinessMonitor = () => {
           console.log("Attempting to connect to WebSocket server...");
           // Use the configured endpoint from your API config 
           // This should handle env differences (local vs production)
-          const wsUrl = process.env.NODE_ENV === 'production' 
-            ? "wss://safedrive-drowsiness-server.onrender.com/ws/drowsiness"
-            : "ws://localhost:8001/ws/drowsiness";
+          const wsUrl = "wss://safedrive-9nrn.onrender.com/ws/drowsiness"
             
           wsRef.current = new WebSocket(wsUrl);
 
@@ -511,11 +509,6 @@ const DrowsinessMonitor = () => {
                   <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-500">
                     <h3 className="font-medium mb-2">Connection Status</h3>
                     <p>Cannot connect to the server.</p>
-
-                    <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-lg text-sm">
-                      <p className="font-medium mb-1">Even without server connection:</p>
-                      <p>The live camera feed is still visible so you can monitor yourself.</p>
-                    </div>
                     
                     <div className="mt-4">
                       <p className="font-medium mb-1">Troubleshooting:</p>

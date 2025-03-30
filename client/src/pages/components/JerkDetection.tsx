@@ -336,7 +336,7 @@ const JerkDetection = () => {
             // In a real application, you would use an SMS API service
             // Here we're just simulating the process
 
-            const smsResponse = await axios.post('http://localhost:8001/api/accident-alert', {
+            const smsResponse = await axios.post('https://safedrive-9nrn.onrender.com/api/accident-alert', {
                 location: accidentData.location,
                 speed: accidentData.speed,
                 isDrowsy: accidentData.isDrowsy,
