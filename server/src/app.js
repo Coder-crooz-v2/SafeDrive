@@ -1,8 +1,11 @@
 import express from "express"
 import cors from "cors"
 import cookieParser from "cookie-parser"
+import path from "path"
 
 const app = express()
+
+const __dirname = path.resolve()
 
 const allowedOrigins = [
 "https://safedrive.onrender.com",          // Production URL
