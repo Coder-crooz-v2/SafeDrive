@@ -11,4 +11,4 @@ if [ ! -f "shape_predictor_68_face_landmarks.dat" ]; then
 fi
 
 echo "Starting server on port $PORT"
-uvicorn drowsiness_server:app --host 0.0.0.0 --port 9000
+uvicorn drowsiness_server:app --host 0.0.0.0
