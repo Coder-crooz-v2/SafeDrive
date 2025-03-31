@@ -8,7 +8,7 @@ const app = express()
 const __dirname = path.resolve()
 
 const allowedOrigins = [
-"https://safedrive.onrender.com",          // Production URL
+"https://safedrive-1.onrender.com",          // Production URL
 "http://localhost:3000"                              // Local development URL
 ]
 
