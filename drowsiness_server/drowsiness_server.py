@@ -54,7 +54,7 @@ app.add_middleware(
 )
 
 # Drowsiness detection parameters
-EYE_AR_THRESH = 0.3
+EYE_AR_THRESH = 0.2
 EYE_AR_CONSEC_FRAMES = 30
 COUNTER = 0
 ALARM_ON = False
