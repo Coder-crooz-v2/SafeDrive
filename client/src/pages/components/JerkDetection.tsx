@@ -16,8 +16,8 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { axiosInstance } from '@/lib/axios';
 
 // Constants
-const JERK_THRESHOLD = 15; // Threshold for acceleration change to detect a jerk
-const ACCIDENT_THRESHOLD = 20; // Higher threshold considered as accident
+const JERK_THRESHOLD = 3; // Threshold for acceleration change to detect a jerk
+const ACCIDENT_THRESHOLD = 7; // Higher threshold considered as accident
 const GPS_OPTIONS = {
     enableHighAccuracy: true,
     timeout: 5000,
