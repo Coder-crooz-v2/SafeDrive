@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 // Constants from Python backend
-const EYE_AR_THRESH = 0.2;
+const EYE_AR_THRESH = 0.3;
 
 const DrowsinessMonitor = () => {
   const { isDriving } = useSelector((state: RootState) => state.driving);

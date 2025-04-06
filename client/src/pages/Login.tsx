@@ -63,7 +63,7 @@ const Login = () => {
     
     try {
       const payload = userForm.isEmail 
-        ? { email: userForm.identifier, password: userForm.password }
+        ? { email: userForm.identifier.toLowerCase(), password: userForm.password }
         : { phoneNumber: userForm.identifier, password: userForm.password };
       
       const response = await dispatch(loginUser(payload));
@@ -87,7 +87,7 @@ const Login = () => {
     
     try {
       const payload = adminForm.isEmail 
-        ? { email: adminForm.identifier, password: adminForm.password }
+        ? { email: adminForm.identifier.toLowerCase(), password: adminForm.password }
         : { phoneNumber: adminForm.identifier, password: adminForm.password };
       
       const result = await dispatch(loginAdmin(payload));

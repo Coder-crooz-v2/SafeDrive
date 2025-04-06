@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, Phone, Users, Search, UserCheck, LogOut, AlertTriangle, BarChart2, ChevronUp, ChevronDown, Brain, Loader2 } from 'lucide-react';
+import { Briefcase, Phone, Users, Search, UserCheck, LogOut, AlertTriangle, BarChart2, ChevronUp, ChevronDown, Loader2, Stars } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
@@ -905,7 +905,7 @@ const AdminDashboard = () => {
                                                                                     {analysingId === accident._id ? (
                                                                                         <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                                                                                     ) : (
-                                                                                        <Brain className="h-4 w-4 mr-1" />
+                                                                                        <Stars className="h-4 w-4 mr-1" />
                                                                                     )}
                                                                                     AI Analysis
                                                                                 </Button>

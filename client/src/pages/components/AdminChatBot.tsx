@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, X, Minimize2, Maximize2, MessageSquare } from 'lucide-react';
+import { Send, X, Minimize2, Maximize2, Stars } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -151,7 +151,7 @@ const AdminChatBot = () => {
           onClick={toggleChat} 
           className="h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 transition-all"
         >
-          <MessageSquare className="h-6 w-6 text-white" />
+          <Stars className="h-6 w-6 text-white" />
         </Button>
       )}
 
@@ -162,7 +162,7 @@ const AdminChatBot = () => {
             <div className="flex items-center">
               <Avatar className="h-8 w-8 mr-2">
                 <AvatarImage src="/chatbot-avatar.png" alt="ChatBot" />
-                <AvatarFallback className="bg-blue-700">SD</AvatarFallback>
+                <AvatarFallback className="bg-blue-700"><Stars /></AvatarFallback>
               </Avatar>
               <div>
                 <p className="text-sm font-medium">SafeDrive Assistant</p>
