@@ -141,7 +141,7 @@ const HomePage: React.FC = () => {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <h3 className="text-xl font-bold mb-4">SafeDrive</h3>
-              <p>Making roads safer and insurance smarter since 2023.</p>
+              <p>Making roads safer and insurance smarter</p>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Quick Links</h4>
