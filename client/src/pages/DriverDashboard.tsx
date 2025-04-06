@@ -28,6 +28,7 @@ const DriverDashboard = () => {
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const { isDriving } = useSelector((state: RootState) => state.driving);
+    const [lastValidLocation, setLastValidLocation] = useState<[number, number]>([0, 0]);
 
     useEffect(() => {
         const checkAuthStatus = async () => {
@@ -112,23 +113,10 @@ const DriverDashboard = () => {
         dispatch(setDrivingMode(checked));
         // Here you would normally update the driving status in the backend
         toast(`Driving mode ${checked ? "activated" : "deactivated"}`);
-
-        // In a real app, you might want to make an API call like this:
-        /*
-        axiosInstance.post("/users/update-driving-status", 
-          { isDriving: checked },
-          { withCredentials: true }
-        ).then(() => {
-          toast(`Driving mode ${checked ? "activated" : "deactivated"}`);
-        }).catch(error => {
-          toast("Failed to update driving status");
-          setIsDriving(!checked); // Revert the UI state on failure
-        });
-        */
     };
 
     const handleUpdateProfile = () => {
-        navigate("/profile/edit");
+        navigate("/user/profile/edit");
     };
 
     if (loading) {
@@ -275,7 +263,7 @@ const DriverDashboard = () => {
                 </CardContent>
             </Card>
             <div className="w-full max-w-4xl mx-auto">
-                <DrivingMonitor />
+                <DrivingMonitor lastValidLocation={lastValidLocation} setLastValidLocation={setLastValidLocation}/>
             </div>
             {isDriving && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
@@ -302,7 +290,7 @@ const DriverDashboard = () => {
             )}
 
             {/* Add the JerkDetection component at the bottom of your component, before the final closing div */}
-            <JerkDetection />
+            <JerkDetection lastValidLocation={lastValidLocation} />
         </div>
     );
 };

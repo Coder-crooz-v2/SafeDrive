@@ -61,19 +61,18 @@ const Signup = () => {
       try {
         const response = await axiosInstance.get("/admin/companies"); // Replace with your API endpoint
         const data = response.data.data;
-        console.log(data)
-        setCompanyNames([data.map((company: {companyName: string}) => company.companyName)]); // Assuming the API returns an object with a companyNames array
+        setCompanyNames(data.map((company: { companyName: string }) => company.companyName)); // Assuming the API returns an object with a companyNames array
       } catch (error) {
         console.error("Error fetching company names:", error);
       }
     }
     fetchCompanyNames();
-  },[])
+  }, [])
 
   // Handle user form input changes
   const handleUserChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setUserForm({...userForm, [name]: value });
+    setUserForm({ ...userForm, [name]: value });
   };
 
   // Handle admin form input changes
@@ -85,6 +84,7 @@ const Signup = () => {
   // Handle select changes
   const handleSelectChange = (value: string, field: string) => {
     console.log(value, field);
+    console.log(typeof value)
     setUserForm({ ...userForm, [field]: value });
   };
 
@@ -159,9 +159,9 @@ const Signup = () => {
       });
       dispatch(setLoading(true));
       const result = await dispatch(registerUser(formData)).unwrap();
-      if(result && result.success) {
+      if (result && result.success) {
         toast("Registration successful", {
-          icon: <Check/>,
+          icon: <Check />,
           richColors: true,
           closeButton: true
         });
@@ -170,7 +170,7 @@ const Signup = () => {
       else {
         const errorMessage = result?.message || "Registration failed";
         toast(errorMessage, {
-          icon: <AlertTriangle/>,
+          icon: <AlertTriangle />,
           richColors: true,
           closeButton: true
         })
@@ -195,9 +195,9 @@ const Signup = () => {
       dispatch(setLoading(true));
       console.log(adminForm)
       const result = await dispatch(registerAdmin(adminForm)).unwrap();
-      if(result && result.success) {
+      if (result && result.success) {
         toast("Registration successful", {
-          icon: <Check/>,
+          icon: <Check />,
           richColors: true,
           closeButton: true
         });
@@ -205,7 +205,7 @@ const Signup = () => {
       } else {
         const errorMessage = result?.message || "Registration failed";
         toast(errorMessage, {
-          icon: <AlertTriangle/>,
+          icon: <AlertTriangle />,
           richColors: true,
           closeButton: true
         })
@@ -376,12 +376,17 @@ const Signup = () => {
                           </SelectTrigger>
                           <SelectContent>
                             {
-                              companyNames.map((company, index) => (
-                                <SelectItem key={index} value={company}>
-                                  {company}
-                                </SelectItem>
-                              ))
-                            }                            
+                              companyNames.length > 0 ?
+                                (companyNames.map((company, index) => (
+                                  <SelectItem key={index} value={company}>
+                                    {company}
+                                  </SelectItem>
+                                ))) : (
+                                  <SelectItem value="no-providers" disabled>
+                                    No service providers available
+                                  </SelectItem>
+                                )
+                            }
                           </SelectContent>
                         </Select>
                       </div>
@@ -404,8 +409,8 @@ const Signup = () => {
                         <div className="flex gap-2">
                           <Select defaultValue="+91"
                             onValueChange={(value) => {
-                            setPersonalContactCountryCode(value);
-                          }}>
+                              setPersonalContactCountryCode(value);
+                            }}>
                             <SelectTrigger className="w-24">
                               <SelectValue placeholder="+91" />
                             </SelectTrigger>
@@ -447,10 +452,10 @@ const Signup = () => {
 
                           <div className="flex gap-2 mt-2">
                             <div className="flex gap-2 flex-grow">
-                              <Select defaultValue="+91" 
-                              onValueChange={(value) => {
-                                setCountryCode(value);
-                              }}>
+                              <Select defaultValue="+91"
+                                onValueChange={(value) => {
+                                  setCountryCode(value);
+                                }}>
                                 <SelectTrigger className="w-24">
                                   <SelectValue placeholder="+91" />
                                 </SelectTrigger>

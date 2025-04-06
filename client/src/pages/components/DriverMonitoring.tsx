@@ -19,7 +19,13 @@ import LiveMap from "./LiveMap";
 
 const SPEED_LIMIT = 80; // km/h, can be dynamic based on location
 
-const DrivingMonitor = () => {
+const DrivingMonitor = ({ 
+  lastValidLocation, 
+  setLastValidLocation 
+}: { 
+  lastValidLocation: [number, number];
+  setLastValidLocation: React.Dispatch<React.SetStateAction<[number, number]>>;
+}) => {
   const dispatch = useDispatch<AppDispatch>();
   const { isDriving, location, coordinates, speed, isOverspeeding } = 
     useSelector((state: RootState) => state.driving);
@@ -40,6 +46,14 @@ const DrivingMonitor = () => {
                 const currentSpeed = position.coords.speed ? position.coords.speed * 3.6 : 0;
                 const isOverSpeedLimit = currentSpeed > SPEED_LIMIT;
                 
+                const newLocation: [number, number] = [coordinates.lat, coordinates.lng];
+                const isValidLocation = Math.abs(coordinates.lat) > 0.001 && Math.abs(coordinates.lng) > 0.001;
+                
+                if(isValidLocation) {
+                  setLastValidLocation(newLocation);
+                  console.log(lastValidLocation)
+                }
+
                 // Dispatch to redux
                 dispatch(updateDrivingData({
                   coordinates: {
@@ -97,17 +111,7 @@ const DrivingMonitor = () => {
   // Fetch location name from coordinates
   const fetchLocationName = async (lat: number, lng: number): Promise<string> => {
     try {
-      // In a real app, you would use a geocoding API like Google Maps or Mapbox
-      // For this example, we'll simulate the API call
       return "Current Location: "+lat+" N, "+lng+" E"; // Placeholder for actual geocoding
-      
-      /* Real implementation would be:
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}`
-      );
-      const data = await response.json();
-      return data.features[0].place_name;
-      */
     } catch (error) {
       console.error("Error fetching location name:", error);
       return "Unknown Location";

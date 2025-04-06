@@ -81,12 +81,11 @@ const DrowsinessMonitor = () => {
                 hasDetectedFace: data.face_detected || false
               });
               
-              console.log(monitoringResults);
               // Handle drowsiness alerts
               if (data.is_drowsy && !monitoringResults.alertSent) {
                 // Play alert sound if available
                 try {
-                  const alertSound = new Audio('/alert-sound.mp3');
+                  const alertSound = new Audio('/alarm.mp3');
                   alertSound.play().catch(e => console.log("Could not play alert sound:", e));
                 } catch (soundError) {
                   console.log("Audio playback error:", soundError);

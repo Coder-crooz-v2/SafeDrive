@@ -13,7 +13,7 @@ import os
 import logging
 from twilio.rest import Client
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -398,6 +398,7 @@ async def accident_alert(alert_data: AccidentAlert):
         "message": f"Accident alert sent to {result['sent_count']} of {result['total_contacts']} emergency contacts",
         "details": result
     }
+
 
 @app.get("/")
 def read_root():

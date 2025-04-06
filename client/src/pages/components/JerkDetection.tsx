@@ -63,7 +63,7 @@ interface AccidentData {
     victimDetails: string;
 }
 
-const JerkDetection = () => {
+const JerkDetection = ({ lastValidLocation }: { lastValidLocation: [number, number] | null }) => {
     const { isDriving } = useSelector((state: RootState) => state.driving);
 
     // States
@@ -99,16 +99,9 @@ const JerkDetection = () => {
         };
     }, [isDriving]);
 
-    // Fetch drowsiness and overspeeding status from other components/state
     useEffect(() => {
-        // For this example, we'll simulate by randomly setting these values when in driving mode
-        // In a real application, these would come from your drowsiness detection and speed monitoring
         if (isDriving) {
-            // This is just for simulation - in real app these would be derived from 
-            // actual drowsiness detection and speed limit data
             const drowsinessCheckInterval = setInterval(() => {
-                // Get state from your existing drowsiness detection system
-                // This is a placeholder for how you would integrate with it
                 const drowsyStateFromDetection = document.querySelector('.drowsy-indicator')?.getAttribute('data-drowsy') === 'true';
                 setIsDrowsy(drowsyStateFromDetection || false);
             }, 5000);
@@ -254,9 +247,25 @@ const JerkDetection = () => {
         const audio = new Audio('/alarm.mp3');
         audio.play().catch(e => console.error("Couldn't play alarm sound:", e));
 
+        let locationToUse: [number, number] = [0, 0]; // Default to [0, 0] if no valid location is available
+
+        console.log("Current location:", location);
+        console.log("Last valid location:", lastValidLocation);
+
+        if (location && location.latitude !== 0 && location.longitude !== 0) {
+            // Use current location if it's valid
+            locationToUse = [location.latitude, location.longitude];
+            console.log("Using current location:", locationToUse);
+        } else if (lastValidLocation && lastValidLocation[0] !== 0 && lastValidLocation[1] !== 0) {
+            // Fallback to lastValidLocation
+            locationToUse = lastValidLocation;
+            console.log("Using last valid location:", locationToUse);
+        } else {
+            console.warn("No valid location available, using [0, 0]");
+        }
         // Prepare accident data
         const accidentData: AccidentData = {
-            location: location ? [location.latitude, location.longitude] : [0, 0],
+            location: locationToUse,
             speed: speed,
             isDrowsy: isDrowsy,
             isOversped: isOversped,

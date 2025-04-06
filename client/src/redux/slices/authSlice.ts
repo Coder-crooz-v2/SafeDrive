@@ -4,10 +4,15 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 // Types
 interface User {
   _id: string;
-  username?: string;
   fullName?: string;
+  vehicleType?: string;
+  vehicleModel?: string;
+  vehicleNumber?: string;
   email: string;
+  gender?: string;
+  age?: number;
   phoneNumber?: string;
+  emergencyContacts?: string[];
   companyName?: string;
   role: 'Admin' | 'User';
   photo?: string;
@@ -44,18 +49,18 @@ const initialState: AuthState = {
 export const registerUser = createAsyncThunk(
   'auth/registerUser',
   async (userData: any, { rejectWithValue }) => {
-      try {
-        const response = await axiosInstance.post('/users/register', userData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          }
-        });
-        return response.data;
-      }
-      catch(error: any) {
-        return rejectWithValue(error.response?.data?.message || error.message || 'Registration failed');
-      }
+    try {
+      const response = await axiosInstance.post('/users/register', userData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        }
+      });
+      return response.data;
     }
+    catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Registration failed');
+    }
+  }
 );
 
 // Register admin
@@ -86,6 +91,7 @@ export const loginUser = createAsyncThunk(
       const response = await axiosInstance.post('/users/login', credentials, {
         withCredentials: true
       });
+      console.log(response.data);
       return response.data as UserData;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Login failed');
@@ -181,11 +187,38 @@ const authSlice = createSlice({
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
     },
-    setAuth: (state, action: PayloadAction<{isLoggedIn: boolean, isAdmin?: Boolean, user: User | null}>) => {
+    setAuth: (state, action: PayloadAction<{ isLoggedIn: boolean, isAdmin?: Boolean, user: User | null }>) => {
       state.isLoggedIn = action.payload.isLoggedIn;
       state.user = action.payload.user;
       state.isAdmin = action.payload.user?.role === 'Admin';
       state.isLoading = false;
+    },
+    setUser: (state, action: PayloadAction<{
+      fullName?: string;
+      vehicleType?: string;
+      vehicleModel?: string;
+      vehicleNumber?: string;
+      email: string;
+      gender?: string;
+      age?: number;
+      phoneNumber?: string;
+      emergencyContacts?: string[];
+      companyName?: string;
+      photo?: string;
+    }>) => {
+      if (state.user) {
+        state.user.fullName = action.payload.fullName;
+        state.user.vehicleType = action.payload.vehicleType;
+        state.user.vehicleModel = action.payload.vehicleModel;
+        state.user.vehicleNumber = action.payload.vehicleNumber;
+        state.user.email = action.payload.email;
+        state.user.gender = action.payload.gender;
+        state.user.age = action.payload.age;
+        state.user.phoneNumber = action.payload.phoneNumber;
+        state.user.emergencyContacts = action.payload.emergencyContacts;
+        state.user.companyName = action.payload.companyName;
+        state.user.photo = action.payload.photo;
+      }
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
@@ -216,7 +249,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      
+
       // Register admin
       .addCase(registerAdmin.pending, (state) => {
         state.isLoading = true;
@@ -230,7 +263,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      
+
       // Login user
       .addCase(loginUser.pending, (state) => {
         state.isLoading = true;
@@ -254,7 +287,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      
+
       // Login admin
       .addCase(loginAdmin.pending, (state) => {
         state.isLoading = true;
@@ -266,7 +299,7 @@ const authSlice = createSlice({
         state.user = action.payload.data; // Set both admin and user for consistency
         state.isLoggedIn = true;
         state.isAdmin = true;
-        
+
         // Store tokens if provided
         if (action.payload.data.accessToken) {
           localStorage.setItem('accessToken', action.payload.data.accessToken);
@@ -279,7 +312,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      
+
       // Logout user
       .addCase(logoutUser.pending, (state) => {
         state.isLoading = true;
@@ -294,7 +327,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      
+
       // Logout admin
       .addCase(logoutAdmin.pending, (state) => {
         state.isLoading = true;
@@ -310,7 +343,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      
+
       // Check auth status
       .addCase(checkAuthStatus.pending, (state) => {
         state.isLoading = true;
@@ -318,14 +351,14 @@ const authSlice = createSlice({
       })
       .addCase(checkAuthStatus.fulfilled, (state, action: PayloadAction<User>) => {
         state.isLoading = false;
-        
+
         if (action.payload.role === 'Admin') {
           state.admin = action.payload;
           state.isAdmin = true;
         } else {
           state.isAdmin = false;
         }
-        
+
         state.user = action.payload;
         state.isLoggedIn = true;
       })
@@ -339,5 +372,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, setAuth, setLoading, clearAuth, clearAuthError } = authSlice.actions;
+export const { logout, setAuth, setUser, setLoading, clearAuth, clearAuthError } = authSlice.actions;
 export default authSlice.reducer;

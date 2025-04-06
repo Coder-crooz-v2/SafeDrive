@@ -139,6 +139,7 @@ const loginUser = asyncHandler(async (req, res) =>{
    const {accessToken, refreshToken} = await generateAccessAndRefereshTokens(user._id)
 
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+    const serviceProvider = await Admin.findById(loggedInUser.serviceProvider).companyName;
 
     const options = {
         httpOnly: true,
@@ -156,7 +157,10 @@ const loginUser = asyncHandler(async (req, res) =>{
         new ApiResponse(
             200, 
             {
-                user: loggedInUser, accessToken, refreshToken
+                user: loggedInUser,
+                serviceProvider: serviceProvider,
+                accessToken, 
+                refreshToken
             },
             "User logged In Successfully"
         )
@@ -270,14 +274,14 @@ const getCurrentUser = asyncHandler(async(req, res) => {
 
 const updateAccountDetails = asyncHandler(async(req, res) => {
     const {fullName, vehicleType, vehicleModel, vehicleNumber, licenseNumber, age, gender, serviceProvider, email, phoneNumber} = req.body
-
-    if (!fullName || !email || !vehicleType || !vehicleModel || !vehicleNumber || !licenseNumber || !age || !gender || !serviceProvider || !phoneNumber) {
+    if (!fullName && !email && !vehicleType && !vehicleModel && !vehicleNumber && !licenseNumber && !age && !gender && !serviceProvider && !phoneNumber) {
         throw new ApiError(400, "At least one field is required to change")
     }
 
     let existedServiceProvider;
     if(serviceProvider) {
-        existedServiceProvider = await Admin.findById(serviceProvider);
+        console.log(serviceProvider)
+        existedServiceProvider = await Admin.findOne({companyName: serviceProvider});
         if(!existedServiceProvider){
             throw new ApiError(404, "Service Provider not found")
         }
@@ -293,9 +297,9 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
                 vehicleModel: vehicleModel,
                 vehicleNumber: vehicleNumber,
                 licenseNumber: licenseNumber,
+                serviceProvider: existedServiceProvider ? existedServiceProvider._id : req.user?.serviceProvider,
                 age: age,
                 gender: gender,
-                serviceProvider: existedServiceProvider._id,
                 phoneNumber: phoneNumber
             }
         },

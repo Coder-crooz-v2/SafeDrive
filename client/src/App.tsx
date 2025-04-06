@@ -6,6 +6,7 @@ import { Toaster } from "./components/ui/sonner"
 import Login from "./pages/Login"
 import DriverDashboard from "./pages/DriverDashboard"
 import AdminDashboard from "./pages/AdminDashboard"
+import EditProfile from "./pages/EditProfile"
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/sign-up" element={<Signup />} /> 
         <Route path="/learn-more" element={<LearnMore />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/user/profile/edit" element={<EditProfile />} />
         <Route path="/user/:userId/dashboard" element={<DriverDashboard/>} />
         <Route path="/admin/:companySlug/dashboard" element={<AdminDashboard/>} />
         <Route path="*" element={<h1>Not Found</h1>} />

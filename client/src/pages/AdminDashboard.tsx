@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
 import { RootState, AppDispatch } from '../store/store';
@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, Phone, Users, Search, UserCheck, LogOut, AlertTriangle, BarChart2 } from 'lucide-react';
+import { Briefcase, Phone, Users, Search, UserCheck, LogOut, AlertTriangle, BarChart2, ChevronUp, ChevronDown, Brain, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
@@ -49,6 +49,7 @@ import {
     Cell
 } from 'recharts';
 import { axiosInstance } from '@/lib/axios';
+import AdminChatBot from './components/AdminChatBot';
 
 interface SortConfig {
     key: string;
@@ -139,6 +140,10 @@ const AdminDashboard = () => {
     });
     const [accidentFilterBy, setAccidentFilterBy] = useState('all');
     const [accidentSearchTerm, setAccidentSearchTerm] = useState('');
+    const [expandedAccidentId, setExpandedAccidentId] = useState<string | null>(null);
+    const [analysisData, setAnalysisData] = useState<Record<string, any>>({});
+    const [analysingId, setAnalysingId] = useState<string | null>(null);
+    const [analysisError, setAnalysisError] = useState<Record<string, string>>({});
 
     // Fetch data on component mount
     useEffect(() => {
@@ -251,6 +256,58 @@ const AdminDashboard = () => {
             toast.error('Failed to load accident data');
         } finally {
             setAccidentsLoading(false);
+        }
+    };
+
+    const handleAnalyzeAccident = async (accident: Accident) => {
+        // Set loading state
+        setAnalysingId(accident._id);
+        setAnalysisError({ ...analysisError, [accident._id]: '' });
+
+        try {
+            // Prepare the request data
+            const requestData = {
+                driver_data: {
+                    driver_name: accident.victimDetails.fullName,
+                    birth_date: new Date(new Date().getFullYear() - accident.victimDetails.age, 0, 1).toISOString().split('T')[0], // Approximate using age
+                    gender: accident.victimDetails.gender,
+                    vehicle_number: accident.victimDetails.vehicleNumber,
+                    vehicle_model: accident.victimDetails.vehicleModel,
+                    model_name: accident.victimDetails.vehicleModel, // Using model as model_name if specific name not available
+                    drowsiness_state: accident.isDrowsy ? 1 : 0,
+                    accident_prone_area: 0, // Not available in accident data, defaulting to 0
+                    overspeeding: accident.isOversped ? 1 : 0,
+                    jerk: 1 // Not available in accident data, defaulting to 0
+                }
+            };
+
+            // Send the request to analyze-risk endpoint
+            const response = await axiosInstance.post(
+                'http://localhost:8002/analyze-risk',
+                requestData,
+                {
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
+            console.log('Analysis response:', response.data);
+            // Store the analysis result
+            setAnalysisData({
+                ...analysisData,
+                [accident._id]: response.data.data
+            });
+
+            // Expand the accident row to show analysis
+            setExpandedAccidentId(accident._id);
+
+        } catch (error: any) {
+            console.error('Analysis failed:', error);
+            setAnalysisError({
+                ...analysisError,
+                [accident._id]: error.response?.data?.message || 'Failed to analyze accident data'
+            });
+            toast.error('Failed to analyze accident data');
+        } finally {
+            setAnalysingId(null);
         }
     };
 
@@ -378,11 +435,6 @@ const AdminDashboard = () => {
             </div>
         );
     }
-
-    // if (!isLoggedIn || !isAdmin) {
-    //     // Redirect to login if not authenticated or not an admin
-    //     return <Navigate to="/login" replace />;
-    // }
 
     return (
         <div className="container mx-auto py-8 px-4">
@@ -657,25 +709,31 @@ const AdminDashboard = () => {
                                         </div>
                                     ) : accidents.length > 0 ? (
                                         <div className="h-80 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <RechartsPieChart>
-                                                    <Pie
-                                                        data={accidentTypeData}
-                                                        cx="50%"
-                                                        cy="50%"
-                                                        outerRadius={100}
-                                                        fill="#8884d8"
-                                                        dataKey="value"
-                                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                                    >
-                                                        {accidentTypeData.map((_, index) => (
-                                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                        ))}
-                                                    </Pie>
-                                                    <Tooltip formatter={(value) => [`${value} accidents`, 'Count']} />
-                                                    <Legend />
-                                                </RechartsPieChart>
-                                            </ResponsiveContainer>
+                                            {accidentTypeData.every(item => item.value === 0) ? (
+                                                <div className="h-full w-full flex items-center justify-center text-gray-500">
+                                                    No categorizable accident data available
+                                                </div>
+                                            ) : (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <RechartsPieChart>
+                                                        <Pie
+                                                            data={accidentTypeData}
+                                                            cx="50%"
+                                                            cy="50%"
+                                                            outerRadius={100}
+                                                            fill="#8884d8"
+                                                            dataKey="value"
+                                                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                                        >
+                                                            {accidentTypeData.map((_, index) => (
+                                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                            ))}
+                                                        </Pie>
+                                                        <Tooltip formatter={(value) => [`${value} accidents`, 'Count']} />
+                                                        <Legend />
+                                                    </RechartsPieChart>
+                                                </ResponsiveContainer>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="h-80 w-full flex items-center justify-center text-gray-500">
@@ -771,72 +829,286 @@ const AdminDashboard = () => {
                                                         </TableHead>
                                                         <TableHead>Location</TableHead>
                                                         <TableHead>Incident Type</TableHead>
+                                                        <TableHead>Actions</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
                                                     {filteredAccidents.length > 0 ? (
-                                                        filteredAccidents.map((accident) => (
-                                                            <TableRow key={accident._id}>
-                                                                <TableCell>
-                                                                    <Avatar>
-                                                                        <AvatarImage
-                                                                            src={accident.victimDetails.photo}
-                                                                            alt={accident.victimDetails.fullName}
-                                                                        />
-                                                                        <AvatarFallback>
-                                                                            {getInitials(accident.victimDetails.fullName)}
-                                                                        </AvatarFallback>
-                                                                    </Avatar>
-                                                                </TableCell>
-                                                                <TableCell className="font-medium">
-                                                                    {accident.victimDetails.fullName}
-                                                                    <div className="text-xs text-gray-500">
-                                                                        {accident.victimDetails.phoneNumber}
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <div>{accident.victimDetails.vehicleModel}</div>
-                                                                    <div className="text-xs text-gray-500">
-                                                                        {accident.victimDetails.vehicleNumber}
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <Badge
-                                                                        variant={accident.isOversped ? "destructive" : "outline"}
-                                                                    >
-                                                                        {accident.speed} km/h
-                                                                    </Badge>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {format(new Date(accident.createdAt), 'MMM dd, yyyy HH:mm')}
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {accident.location[0].toFixed(6)}, {accident.location[1].toFixed(6)}
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {accident.isDrowsy && accident.isOversped ? (
-                                                                        <Badge className="bg-red-100 text-red-800 border-red-200">
-                                                                            Drowsy & Overspeeding
-                                                                        </Badge>
-                                                                    ) : accident.isDrowsy ? (
-                                                                        <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                                                                            Drowsy
-                                                                        </Badge>
-                                                                    ) : accident.isOversped ? (
-                                                                        <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                                                                            Overspeeding
-                                                                        </Badge>
-                                                                    ) : (
-                                                                        <Badge variant="outline">
-                                                                            Other
-                                                                        </Badge>
+                                                        <>
+                                                            {filteredAccidents.map((accident) => (
+                                                                <React.Fragment key={accident._id}>
+                                                                    <TableRow>
+                                                                        <TableCell>
+                                                                            <Avatar>
+                                                                                <AvatarImage
+                                                                                    src={accident.victimDetails.photo}
+                                                                                    alt={accident.victimDetails.fullName}
+                                                                                />
+                                                                                <AvatarFallback>
+                                                                                    {getInitials(accident.victimDetails.fullName)}
+                                                                                </AvatarFallback>
+                                                                            </Avatar>
+                                                                        </TableCell>
+                                                                        <TableCell className="font-medium">
+                                                                            {accident.victimDetails.fullName}
+                                                                            <div className="text-xs text-gray-500">
+                                                                                {accident.victimDetails.phoneNumber}
+                                                                            </div>
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <div>{accident.victimDetails.vehicleModel}</div>
+                                                                            <div className="text-xs text-gray-500">
+                                                                                {accident.victimDetails.vehicleNumber}
+                                                                            </div>
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <Badge
+                                                                                variant={accident.isOversped ? "destructive" : "outline"}
+                                                                            >
+                                                                                {accident.speed} km/h
+                                                                            </Badge>
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            {format(new Date(accident.createdAt), 'MMM dd, yyyy HH:mm')}
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            {accident.location[0].toFixed(6)}, {accident.location[1].toFixed(6)}
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            {accident.isDrowsy && accident.isOversped ? (
+                                                                                <Badge className="bg-red-100 text-red-800 border-red-200">
+                                                                                    Drowsy & Overspeeding
+                                                                                </Badge>
+                                                                            ) : accident.isDrowsy ? (
+                                                                                <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                                                                    Drowsy
+                                                                                </Badge>
+                                                                            ) : accident.isOversped ? (
+                                                                                <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                                                                                    Overspeeding
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge variant="outline">
+                                                                                    Other
+                                                                                </Badge>
+                                                                            )}
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <div className="flex items-center space-x-2">
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    className="flex items-center"
+                                                                                    onClick={() => handleAnalyzeAccident(accident)}
+                                                                                    disabled={analysingId === accident._id}
+                                                                                >
+                                                                                    {analysingId === accident._id ? (
+                                                                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                                                                    ) : (
+                                                                                        <Brain className="h-4 w-4 mr-1" />
+                                                                                    )}
+                                                                                    AI Analysis
+                                                                                </Button>
+
+                                                                                {analysisData[accident._id] && (
+                                                                                    <Button
+                                                                                        size="sm"
+                                                                                        variant="ghost"
+                                                                                        onClick={() => setExpandedAccidentId(
+                                                                                            expandedAccidentId === accident._id ? null : accident._id
+                                                                                        )}
+                                                                                    >
+                                                                                        {expandedAccidentId === accident._id ? (
+                                                                                            <ChevronUp className="h-4 w-4" />
+                                                                                        ) : (
+                                                                                            <ChevronDown className="h-4 w-4" />
+                                                                                        )}
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        </TableCell>
+                                                                    </TableRow>
+
+                                                                    {/* Expanded Analysis Row */}
+                                                                    {expandedAccidentId === accident._id && analysisData[accident._id] && (
+                                                                        <TableRow className="bg-slate-50">
+                                                                            <TableCell colSpan={8} className="p-4">
+                                                                                <div className="bg-white rounded-md border p-4 space-y-4">
+                                                                                    <div className="flex justify-between items-start">
+                                                                                        <div>
+                                                                                            <h3 className="text-lg font-semibold">AI Risk Analysis</h3>
+                                                                                            <p className="text-sm text-gray-500">
+                                                                                                Generated analysis for {accident.victimDetails.fullName}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <Badge
+                                                                                            className={
+                                                                                                analysisData[accident._id].risk_level === 'LOW RISK' ? 'bg-green-100 text-green-800 border-green-200' :
+                                                                                                    analysisData[accident._id].risk_level === 'MODERATE RISK' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                                                                                        analysisData[accident._id].risk_level === 'HIGH RISK' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                                                                                                            'bg-red-100 text-red-800 border-red-200'
+                                                                                            }
+                                                                                        >
+                                                                                            {analysisData[accident._id].risk_level} - Score: {(analysisData[accident._id].risk_score * 100).toFixed(0)}%
+                                                                                        </Badge>
+                                                                                    </div>
+
+                                                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                                        {/* Driver Details */}
+                                                                                        <Card className="border-0 shadow-sm">
+                                                                                            <CardHeader className="pb-2">
+                                                                                                <CardTitle className="text-sm font-medium">Driver Details</CardTitle>
+                                                                                            </CardHeader>
+                                                                                            <CardContent className="pt-0">
+                                                                                                <dl className="space-y-1 text-sm">
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Name:</dt>
+                                                                                                        <dd>{analysisData[accident._id].personal_details.name}</dd>
+                                                                                                    </div>
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Age:</dt>
+                                                                                                        <dd>{analysisData[accident._id].personal_details.age}</dd>
+                                                                                                    </div>
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Gender:</dt>
+                                                                                                        <dd>{analysisData[accident._id].personal_details.gender}</dd>
+                                                                                                    </div>
+                                                                                                </dl>
+                                                                                            </CardContent>
+                                                                                        </Card>
+
+                                                                                        {/* Vehicle Details */}
+                                                                                        <Card className="border-0 shadow-sm">
+                                                                                            <CardHeader className="pb-2">
+                                                                                                <CardTitle className="text-sm font-medium">Vehicle Details</CardTitle>
+                                                                                            </CardHeader>
+                                                                                            <CardContent className="pt-0">
+                                                                                                <dl className="space-y-1 text-sm">
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Number:</dt>
+                                                                                                        <dd>{analysisData[accident._id].vehicle_details.vehicle_number}</dd>
+                                                                                                    </div>
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Model:</dt>
+                                                                                                        <dd>{analysisData[accident._id].vehicle_details.vehicle_model}</dd>
+                                                                                                    </div>
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Name:</dt>
+                                                                                                        <dd>{analysisData[accident._id].vehicle_details.model_name}</dd>
+                                                                                                    </div>
+                                                                                                </dl>
+                                                                                            </CardContent>
+                                                                                        </Card>
+
+                                                                                        {/* Insurance Recommendation */}
+                                                                                        <Card className="border-0 shadow-sm">
+                                                                                            <CardHeader className="pb-2">
+                                                                                                <CardTitle className="text-sm font-medium">Insurance Recommendation</CardTitle>
+                                                                                            </CardHeader>
+                                                                                            <CardContent className="pt-0">
+                                                                                                <dl className="space-y-1 text-sm">
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Status:</dt>
+                                                                                                        <dd>
+                                                                                                            <Badge
+                                                                                                                variant={
+                                                                                                                    analysisData[accident._id].insurance_recommendation.status === 'STANDARD' ? 'outline' :
+                                                                                                                        analysisData[accident._id].insurance_recommendation.status === 'APPROVED' ? 'secondary' :
+                                                                                                                            analysisData[accident._id].insurance_recommendation.status === 'CONDITIONAL' ? 'default' :
+                                                                                                                                'destructive'
+                                                                                                                }
+                                                                                                            >
+                                                                                                                {analysisData[accident._id].insurance_recommendation.status}
+                                                                                                            </Badge>
+                                                                                                        </dd>
+                                                                                                    </div>
+                                                                                                    <div className="flex justify-between">
+                                                                                                        <dt className="text-gray-500">Premium Loading:</dt>
+                                                                                                        <dd>{analysisData[accident._id].insurance_recommendation.premium_loading}</dd>
+                                                                                                    </div>
+                                                                                                </dl>
+                                                                                            </CardContent>
+                                                                                        </Card>
+                                                                                    </div>
+
+                                                                                    {/* Gemini Insights */}
+                                                                                    <div>
+                                                                                        <h4 className="mb-2">Gemini Analysis</h4>
+                                                                                        <div className="text-sm prose prose-sm max-w-none bg-gray-50 p-4 rounded-md overflow-auto max-h-96 max-w-screen">
+                                                                                            <div className='text-wrap' dangerouslySetInnerHTML={{
+                                                                                                __html: analysisData[accident._id].gemini_insights
+                                                                                                    .replace(/\n/g, '<br>')
+                                                                                                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                                                                                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                                                                                                    .replace(/^## (.*?)$/gm, '<h2 class="text-lg font-bold mt-2 mb-1">$1</h2>')
+                                                                                                    .replace(/^\* (.*?)$/gm, '<li>$1</li>')
+                                                                                                    .replace(/(.*?)<\/li>/g, (match: string) => {
+                                                                                                        if (!match.startsWith('<ul>')) {
+                                                                                                            return `<ul class="list-disc pl-5 my-2">${match}</ul>`;
+                                                                                                        }
+                                                                                                        return match;
+                                                                                                    })
+                                                                                                    .replace(/<\/ul><ul class="list-disc pl-5 my-2">/g, '')
+                                                                                            }} />
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Required Actions */}
+                                                                                    {analysisData[accident._id].insurance_recommendation.required_actions && (
+                                                                                        <div>
+                                                                                            <h4 className="mb-2">Required Actions</h4>
+                                                                                            <ul className="list-disc list-inside space-y-1 text-sm">
+                                                                                                {analysisData[accident._id].insurance_recommendation.required_actions.map((action: string, index: number) => (
+                                                                                                    <li key={index} className="text-gray-700">{action}</li>
+                                                                                                ))}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Recommended Actions */}
+                                                                                    {analysisData[accident._id].insurance_recommendation.recommended_actions && (
+                                                                                        <div>
+                                                                                            <h4 className="font-medium mb-2">Recommended Actions</h4>
+                                                                                            <ul className="list-disc list-inside space-y-1 text-sm">
+                                                                                                {analysisData[accident._id].insurance_recommendation.recommended_actions.map((action: string, index: number) => (
+                                                                                                    <li key={index} className="text-gray-700">{action}</li>
+                                                                                                ))}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Benefits */}
+                                                                                    {analysisData[accident._id].insurance_recommendation.benefits && (
+                                                                                        <div>
+                                                                                            <h4 className="font-medium mb-2">Benefits</h4>
+                                                                                            <ul className="list-disc list-inside space-y-1 text-sm">
+                                                                                                {analysisData[accident._id].insurance_recommendation.benefits.map((benefit: string, index: number) => (
+                                                                                                    <li key={index} className="text-gray-700">{benefit}</li>
+                                                                                                ))}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </TableCell>
+                                                                        </TableRow>
                                                                     )}
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))
+
+                                                                    {/* Analysis Error Row */}
+                                                                    {analysisError[accident._id] && (
+                                                                        <TableRow>
+                                                                            <TableCell colSpan={8} className="p-0">
+                                                                                <div className="bg-red-50 text-red-700 px-4 py-2 text-sm">
+                                                                                    Error: {analysisError[accident._id]}
+                                                                                </div>
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    )}
+                                                                </React.Fragment>
+                                                            ))}
+                                                        </>
                                                     ) : (
                                                         <TableRow>
-                                                            <TableCell colSpan={7} className="text-center h-24 text-gray-500">
+                                                            <TableCell colSpan={8} className="text-center h-24 text-gray-500">
                                                                 {accidentSearchTerm || accidentFilterBy !== 'all' ? (
                                                                     <div className="flex flex-col items-center justify-center">
                                                                         <Search className="h-6 w-6 mb-2 text-gray-400" />
@@ -871,6 +1143,7 @@ const AdminDashboard = () => {
                     </div>
                 </TabsContent>
             </Tabs>
+            <AdminChatBot />
         </div>
     );
 };
