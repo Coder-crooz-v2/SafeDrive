@@ -64,7 +64,7 @@ const AdminChatBot = () => {
       console.log("Sending request:", requestPayload);
       
       // Send to the FastAPI endpoint using axios directly
-      const response = await axios.post('http://localhost:8002/chatbot', requestPayload, {
+      const response = await axios.post('https://safedrive-chatbot.onrender.com/chatbot', requestPayload, {
         headers: {
           'Content-Type': 'application/json'
         }

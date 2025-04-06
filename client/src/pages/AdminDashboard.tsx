@@ -283,7 +283,7 @@ const AdminDashboard = () => {
 
             // Send the request to analyze-risk endpoint
             const response = await axiosInstance.post(
-                'http://localhost:8002/analyze-risk',
+                'https://safedrive-chatbot.onrender.com/analyze-risk',
                 requestData,
                 {
                     headers: { 'Content-Type': 'application/json' }
