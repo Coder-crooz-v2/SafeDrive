@@ -444,9 +444,8 @@ class InsuranceProviderChatbot:
             return conv_id, error_message
 
 # Initialize the chatbot
-try:
-    API_KEY = "AIzaSyAEw60rlCckJ6j9TSjQR3BVyjFQmlgqraw"  # In production, use env variables
-    configure_genai(API_KEY)
+try:  # In production, use env variables
+    configure_genai(GEMINI_API_KEY)
     model = initialize_model()
     chatbot = InsuranceProviderChatbot(model)
     
