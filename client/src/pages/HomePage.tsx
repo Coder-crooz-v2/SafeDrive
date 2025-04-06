@@ -105,7 +105,7 @@ const HomePage: React.FC = () => {
               <div className="text-center">
                 <div className="bg-white text-blue-900 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-6 text-xl font-bold">1</div>
                 <h3 className="text-xl font-semibold mb-4">Connect</h3>
-                <p>Install our discrete sensor in your vehicle</p>
+                <p>Simply login and start driving</p>
               </div>
               <div className="text-center">
                 <div className="bg-white text-blue-900 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-6 text-xl font-bold">2</div>
