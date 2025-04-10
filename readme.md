@@ -123,7 +123,7 @@ The application is built using:
 - JWT for authentication
 - Geolocation APIs for location tracking
 - Device sensors (accelerometer, gyroscope) for motion detection
-- Camera integration for drowsiness detection
+- Camera integration with mediapipe library for drowsiness detection
 
 ## Safety Testing
 The application includes a "Test Accident Detection" feature that allows users to simulate an accident scenario for testing the emergency response system without actually experiencing an accident.
